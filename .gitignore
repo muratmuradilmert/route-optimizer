@@ -1,0 +1,22 @@
+# Service account keys and any other JSON in the project root must never be committed
+# (servis hesabı anahtarı ve diğer gizli JSON dosyaları asla depoya girmesin)
+/*.json
+
+# Data files: never commit real POI / staff data (gerçek veri dosyaları)
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+~$*
+
+# Secrets, just in case
+.env
+.env.*
+
+# Editor / OS / tooling
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

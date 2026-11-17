@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Route Optimizer</title>
+  <meta name="description" content="Saha ziyareti planlama ve rota optimizasyonu (Google Route Optimization API). Field visit planning and route optimization.">
+  <script>
+    // Apply the saved theme before first paint to avoid a light flash.
+    try {
+      if ((localStorage.getItem("route_optimizer_theme") || localStorage.getItem("poi_theme")) === "dark") document.documentElement.classList.add("dark");
+    } catch (e) { /* storage unavailable */ }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha384-PPIZEGYM1v8zp5Py7UjFb79S58UeqCL9pYVnVPURKEqvioPROaVAJKKLzvH2rDnI" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#f8fafc; --panel:#fff; --panel2:#f1f5f9; --border:#e2e8f0;
+      --text:#0f172a; --muted:#64748b; --primary:#d11f52; --primary2:#b41643;
+      --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --info:#3b82f6;
+      --shadow:0 8px 30px rgba(15,23,42,.08);
+    }
+    :root.dark {
+      --bg:#0f172a; --panel:#1e293b; --panel2:#263449; --border:#334155;
+      --text:#f8fafc; --muted:#94a3b8; --primary:#e11d48; --primary2:#f43f5e;
+      --shadow:0 8px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;font-family:Inter,sans-serif;background:var(--bg);color:var(--text)}
+    body{display:flex;flex-direction:column;overflow:hidden}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    header{
+      height:70px;flex:0 0 70px;background:var(--panel);border-bottom:2px solid var(--primary);
+      display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:20px;
+      box-shadow:0 2px 8px rgba(15,23,42,.05);z-index:10
+    }
+    .brand{display:flex;align-items:center;min-width:260px}
+    .brand h1{font:700 19px Outfit,sans-serif;margin:0;letter-spacing:-.3px}
+    .header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .btn{
+      height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;background:var(--panel);
+      color:var(--text);display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;
+      transition:.18s ease;white-space:nowrap
+    }
+    .btn:hover{transform:translateY(-1px);border-color:var(--primary);color:var(--primary)}
+    .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+    .btn.primary:hover{background:var(--primary2);color:#fff}
+    .btn.success{background:var(--success);border-color:var(--success);color:#fff}
+    .btn.danger{color:var(--danger);background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25)}
+    .btn.icon{width:36px;padding:0}
+    .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+    .status{
+      height:30px;border-radius:999px;padding:0 10px;display:flex;align-items:center;gap:6px;
+      font-size:11px;font-weight:700;background:var(--panel2);color:var(--muted);border:1px solid var(--border)
+    }
+    .status.ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.25);color:var(--success)}
+    .layout{display:grid;grid-template-columns:350px minmax(0,1fr);flex:1;min-height:0}
+    aside{background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow:auto}
+    .card{border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:14px;margin-bottom:12px}
+    .card-title{font:600 12px Outfit,sans-serif;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+    .form-group{margin-bottom:10px}
+    .form-group:last-child{margin-bottom:0}
+    label{font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px}
+    input,select{
+      width:100%;height:34px;border:1px solid var(--border);border-radius:7px;background:var(--panel);
+      color:var(--text);padding:0 9px;font-size:12px;outline:none
+    }
+    input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(209,31,82,.1)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .check{display:flex;align-items:center;gap:8px}
+    .check input{width:16px;height:16px;margin:0}
+    .check label{margin:0;cursor:pointer;color:var(--text)}
+    .dropzone{
+      border:1.5px dashed var(--border);border-radius:9px;padding:16px;text-align:center;color:var(--muted);
+      transition:.18s ease;cursor:pointer;background:var(--bg)
+    }
+    .dropzone:hover,.dropzone.drag{border-color:var(--primary);background:rgba(209,31,82,.04);color:var(--primary)}
+    .dropzone i{font-size:23px;margin-bottom:7px}
+    .dropzone strong{display:block;font-size:12px;color:var(--text)}
+    .dropzone span{font-size:10px}
+    .counts{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+    .count{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center}
+    .count b{display:block;font-size:18px;font-family:Outfit}
+    .count span{font-size:9px;color:var(--muted);text-transform:uppercase}
+    .side-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+    main{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+    .tabs{height:48px;flex:0 0 48px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:end;padding:0 18px;gap:4px}
+    .tab{
+      height:38px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);
+      padding:0 14px;font-size:12px;font-weight:600
+    }
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .workspace{display:grid;grid-template-rows:minmax(250px,47%) minmax(230px,53%);flex:1;min-height:0}
+    .map-shell{position:relative;background:#dbe4ec;border-bottom:1px solid var(--border);min-height:0}
+    #map{width:100%;height:100%}
+    .map-empty{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);color:#475569;text-align:center}
+    .map-empty i{font-size:42px;margin-bottom:10px}
+    .map-empty p{margin:0;font-size:12px}
+    .map-empty small{display:block;margin-top:6px}
+    .map-warning{
+      position:absolute;left:12px;bottom:12px;z-index:3;max-width:540px;background:rgba(255,255,255,.94);
+      color:#92400e;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:10px;display:none
+    }
+    .stats{position:absolute;top:12px;left:12px;right:12px;z-index:2;display:flex;gap:8px;pointer-events:none}
+    .stat{background:rgba(255,255,255,.94);color:#0f172a;border-radius:9px;padding:8px 11px;box-shadow:var(--shadow);min-width:110px}
+    .stat span{display:block;font-size:9px;color:#64748b;text-transform:uppercase;font-weight:700}
+    .stat b{font:700 16px Outfit}
+    .table-shell{min-height:0;display:flex;flex-direction:column;background:var(--panel)}
+    .table-tools{height:46px;flex:0 0 46px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);gap:12px}
+    .table-title{font:600 13px Outfit;display:flex;align-items:center;gap:8px}
+    .table-tools input{width:230px}
+    .table-filters{display:flex;gap:8px}
+    .table-filters select{width:160px}
+    .table-scroll{overflow:auto;flex:1}
+    table{border-collapse:separate;border-spacing:0;width:100%;font-size:11px}
+    th{position:sticky;top:0;background:var(--panel2);color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;z-index:1}
+    td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+    tr:hover td{background:rgba(209,31,82,.03)}
+    .pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:700;background:var(--panel2);color:var(--muted)}
+    .pill.ok{background:rgba(16,185,129,.1);color:var(--success)}
+    .pill.warn{background:rgba(245,158,11,.12);color:#b45309}
+    .pill.bad{background:rgba(239,68,68,.1);color:var(--danger)}
+    .empty{padding:45px;text-align:center;color:var(--muted)}
+    .empty i{font-size:34px;display:block;margin-bottom:10px}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+    .modal-backdrop.open{display:flex}
+    .modal{width:min(520px,100%);max-height:85vh;overflow:auto;background:var(--panel);border-radius:12px;box-shadow:0 25px 80px rgba(0,0,0,.3)}
+    .modal-head,.modal-foot{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .modal-head{border-bottom:1px solid var(--border)}
+    .modal-foot{border-top:1px solid var(--border);justify-content:flex-end}
+    .modal-head h3{font:600 15px Outfit;margin:0}
+    .modal-body{padding:16px}
+    .help{font-size:11px;line-height:1.6;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:10px;border-radius:8px}
+    .errors{margin:0;padding-left:18px;color:var(--danger);font-size:11px;line-height:1.7}
+    .toast{position:fixed;right:18px;bottom:18px;z-index:200;background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--info);border-radius:9px;padding:11px 13px;box-shadow:var(--shadow);min-width:280px;max-width:460px;display:none}
+    .toast.show{display:block}
+    .toast.success{border-left-color:var(--success)}
+    .toast.error{border-left-color:var(--danger)}
+    .toast b{display:block;font-size:12px;margin-bottom:3px}
+    .toast span{font-size:10px;color:var(--muted)}
+    .spinner{animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .lang-btn{font:700 11px Outfit,sans-serif;letter-spacing:.04em}
+    @media(max-width:900px){
+      header{height:auto;min-height:70px;padding:10px 14px}.layout{grid-template-columns:1fr}aside{display:none}
+      .header-actions .status,.header-actions .secondary{display:none}.workspace{grid-template-rows:42% 58%}
+      .stats{overflow:auto}.stat{min-width:100px}.table-tools input{width:150px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>Route Optimizer</h1>
+    </div>
+    <div class="header-actions">
+      <div id="api-status" class="status"><i class="fa-solid fa-key"></i><span></span></div>
+      <button class="btn icon lang-btn" id="lang-button" data-i18n-title="lang.switch" title="Switch to English">EN</button>
+      <button class="btn icon secondary" id="theme-button" data-i18n-title="theme.toggle" title="Temayı değiştir"><i class="fa-solid fa-moon"></i></button>
+      <button class="btn secondary" id="api-button"><i class="fa-solid fa-key"></i> <span data-i18n="btn.api">API Ayarları</span></button>
+      <button class="btn secondary" id="template-button"><i class="fa-solid fa-file-excel"></i> <span data-i18n="btn.template">Şablon İndir</span></button>
+      <label class="btn secondary"><i class="fa-solid fa-upload"></i> <span data-i18n="btn.upload">Excel Yükle</span><input id="file-input" type="file" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>
+      <button class="btn" id="validate-button"><i class="fa-solid fa-circle-check"></i> <span data-i18n="btn.validate">Doğrula</span></button>
+      <button class="btn primary" id="optimize-button"><i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="btn.optimize">Optimize Et</span></button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-user"></i> <span data-i18n="side.person">Personel</span></div>
+        <div class="form-group"><label data-i18n="side.personLabel">Rotası planlanacak personel</label><select id="resource-select" disabled><option value=""></option></select></div>
+        <div class="help" data-i18n="side.personHelp">Her çalışma günü için tek araçlı ayrı bir istek gönderilir (Single Vehicle Routing).</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-sliders"></i> <span data-i18n="side.route">Rota Ayarları</span></div>
+        <div class="form-group">
+          <label data-i18n="side.start">Başlangıç noktası (isteğe bağlı)</label>
+          <input id="start-point" type="text" data-i18n-placeholder="side.startPlaceholder" placeholder="enlem, boylam (örn. 40.9910, 29.0250)" autocomplete="off">
+        </div>
+        <div class="form-group side-actions">
+          <button class="btn" id="pick-start-button" type="button"><i class="fa-solid fa-map-pin"></i> <span data-i18n="side.pick">Haritadan Seç</span></button>
+          <button class="btn" id="clear-start-button" type="button"><i class="fa-solid fa-xmark"></i> <span data-i18n="side.remove">Kaldır</span></button>
+        </div>
+        <div class="form-group check">
+          <input id="return-to-start" type="checkbox" checked>
+          <label for="return-to-start" data-i18n="side.returnToStart">Gün sonunda başlangıç noktasına dön</label>
+        </div>
+        <div class="row">
+          <div class="form-group"><label data-i18n="side.park">Nokta başı park (dk)</label><input id="park-minutes" type="number" min="0" max="120" step="1" value="5"></div>
+          <div class="form-group"><label data-i18n="side.break">Toplam mola (dk)</label><input id="break-minutes" type="number" min="0" max="480" step="5" value="120"></div>
+        </div>
+        <div class="help" id="route-settings-help"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-calendar-days"></i> <span data-i18n="side.period">Planlama Dönemi</span></div>
+        <div class="row">
+          <div class="form-group"><label data-i18n="side.periodStart">Başlangıç</label><input id="plan-start" type="date"></div>
+          <div class="form-group"><label data-i18n="side.periodEnd">Bitiş</label><input id="plan-end" type="date"></div>
+        </div>
+        <div class="form-group">
+          <label data-i18n="side.timezone">Saat dilimi</label>
+          <input value="Europe/Istanbul (UTC+03:00)" disabled>
+        </div>
+        <div class="form-group check">
+          <input id="consider-traffic" type="checkbox" checked>
+          <label for="consider-traffic" data-i18n="side.traffic">Araç rotalarında trafiği dikkate al</label>
+        </div>
+        <div class="form-group check">
+          <input id="finish-in-window" type="checkbox" checked>
+          <label for="finish-in-window" data-i18n="side.finishInWindow">Ziyaret, saat aralığı bitmeden tamamlansın</label>
+        </div>
+        <div class="form-group check">
+          <input id="skip-holidays" type="checkbox" checked>
+          <label for="skip-holidays" data-i18n="side.skipHolidays">Resmî tatillerde çalışılmaz (Türkiye)</label>
+        </div>
+        <div class="form-group">
+          <label data-i18n="side.solverTimeout">Çözüm süresi</label>
+          <select id="solver-timeout"><option value="5" data-i18n="side.sec5">5 saniye</option><option value="15" selected data-i18n="side.sec15">15 saniye</option><option value="30" data-i18n="side.sec30">30 saniye</option><option value="60" data-i18n="side.sec60">60 saniye</option></select>
+        </div>
+        <div class="form-group">
+          <label data-i18n="side.dayFill">Günlük doluluk hedefi (tahmini)</label>
+          <select id="day-fill"><option value="60">%60</option><option value="70">%70</option><option value="80" selected>%80</option><option value="90">%90</option><option value="100">%100</option></select>
+        </div>
+        <div class="help" data-i18n="side.dayFillHelp">Günü serbest ziyaretler, dönemin başından itibaren mümkün olan en az güne toplanır; kalan günler boş kalır.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-file-import"></i> <span data-i18n="side.dataFile">Veri Dosyası</span></div>
+        <div class="dropzone" id="dropzone">
+          <i class="fa-solid fa-file-excel"></i>
+          <strong id="file-name"></strong>
+          <span data-i18n="side.sheets">POI_LISTESI, ZIYARET_KURALLARI ve PERSONEL_ARACLAR sayfaları</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-chart-simple"></i> <span data-i18n="side.summary">Veri Özeti</span></div>
+        <div class="counts">
+          <div class="count"><b id="point-count">0</b><span>POI</span></div>
+          <div class="count"><b id="visit-count">0</b><span data-i18n="side.visits">Ziyaret</span></div>
+          <div class="count"><b id="resource-count">0</b><span data-i18n="side.workDays">Çalışma Günü</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-check"></i> <span data-i18n="side.actions">İşlemler</span></div>
+        <div class="side-actions">
+          <button class="btn" id="generate-button"><i class="fa-solid fa-calendar-plus"></i> <span data-i18n="btn.generate">Ziyaretleri Üret</span></button>
+          <button class="btn success" id="export-button" disabled><i class="fa-solid fa-download"></i> <span data-i18n="btn.export">Excel'e Aktar</span></button>
+          <button class="btn danger" id="clear-button"><i class="fa-solid fa-trash"></i> <span data-i18n="btn.clear">Temizle</span></button>
+          <button class="btn" id="request-button" disabled><i class="fa-solid fa-code"></i> <span data-i18n="btn.requestJson">İstek JSON</span></button>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="tabs">
+        <button class="tab active" data-tab="visits"><i class="fa-solid fa-location-dot"></i> <span data-i18n="tab.visits">Oluşturulan Ziyaretler</span></button>
+        <button class="tab" data-tab="resources"><i class="fa-solid fa-people-group"></i> <span data-i18n="tab.resources">Çalışma Günleri</span></button>
+        <button class="tab" data-tab="results"><i class="fa-solid fa-route"></i> <span data-i18n="tab.results">Rota Sonuçları</span></button>
+        <button class="tab" data-tab="skipped"><i class="fa-solid fa-triangle-exclamation"></i> <span data-i18n="tab.skipped">Atanamayanlar</span></button>
+      </div>
+      <div class="workspace">
+        <section class="map-shell">
+          <div id="map"></div>
+          <div id="map-empty" class="map-empty"><div><i class="fa-solid fa-map-location-dot"></i><p data-i18n="map.emptyTitle">Haritayı görmek için API Ayarları'na Google Maps API anahtarınızı girin.</p><small data-i18n="map.emptyNote">Harita, Google Maps JavaScript API ile yüklenir.</small></div></div>
+          <div class="stats">
+            <div class="stat"><span data-i18n="stat.distance">Toplam Mesafe</span><b id="stat-distance">0 km</b></div>
+            <div class="stat"><span data-i18n="stat.duration">Toplam Süre</span><b id="stat-duration">0</b></div>
+            <div class="stat"><span data-i18n="stat.days">Planlanan Gün</span><b id="stat-used">0</b></div>
+            <div class="stat"><span data-i18n="stat.visits">Planlanan Ziyaret</span><b id="stat-planned">0</b></div>
+          </div>
+          <div id="walking-warning" class="map-warning"><i class="fa-solid fa-triangle-exclamation"></i> <span data-i18n="map.walkingWarning">Yaya rotaları Google'da beta aşamasındadır; bazı kaldırım ve yaya yolları eksik olabilir. Rotayı sahada kontrol edin.</span></div>
+        </section>
+        <section class="table-shell">
+          <div class="table-tools">
+            <div class="table-title" id="table-title"></div>
+            <div class="table-filters"><select id="day-filter"><option value=""></option></select><input id="table-search" type="search" data-i18n-placeholder="table.search" placeholder="Tabloda ara..."></div>
+          </div>
+          <div class="table-scroll" id="table-container"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="api-modal">
+    <div class="modal">
+      <div class="modal-head"><h3><i class="fa-solid fa-key"></i> <span data-i18n="btn.api">API Ayarları</span></h3><button class="btn icon modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body">
+        <div class="form-group"><label data-i18n="api.mapsKey">Google Maps API anahtarı (harita için)</label><input id="api-key-input" type="password" placeholder="AIzaSy..."></div>
+        <div class="form-group check"><input id="save-key-checkbox" type="checkbox" checked><label for="save-key-checkbox" data-i18n="api.saveKey">Anahtarı bu tarayıcıda hatırla</label></div>
+        <div class="form-group"><label data-i18n="api.projectId">Google Cloud proje kimliği (Project ID)</label><input id="project-id-input" type="text" data-i18n-placeholder="api.projectPlaceholder" placeholder="proje-kimligi"></div>
+        <div class="form-group"><label data-i18n="api.token">OAuth erişim belirteci (isteğe bağlı, saklanmaz)</label><input id="access-token-input" type="password" placeholder="ya29..."></div>
+        <div class="help" data-i18n="api.help">API anahtarı yalnızca Google Maps haritası için kullanılır. Rota istekleri, uygulama Baslat.bat (yerel sunucu) ile açıldığında klasördeki servis hesabı anahtarıyla gönderilir; bu durumda proje kimliği ve belirteç gerekmez. Sunucusuz kullanımda (ör. GitHub Pages) proje kimliğini ve "gcloud auth print-access-token" ile alınan belirteci girin. Belirteç yaklaşık 1 saat geçerlidir ve saklanmaz.</div>
+      </div>
+      <div class="modal-foot"><button class="btn danger" id="delete-key-button"><i class="fa-solid fa-trash"></i> <span data-i18n="api.clear">Anahtarı temizle</span></button><button class="btn primary" id="use-key-button"><i class="fa-solid fa-check"></i> <span data-i18n="api.use">Kaydet</span></button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="message-modal">
+    <div class="modal">
+      <div class="modal-head"><h3 id="message-title"></h3><button class="btn icon modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body" id="message-body"></div>
+      <div class="modal-foot"><button class="btn primary modal-close" data-i18n="modal.close">Kapat</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><b id="toast-title"></b><span id="toast-message"></span></div>
+
+  <script>
+    // =====================================================================
+    // Localization (TR / EN)
+    // Static markup uses data-i18n / data-i18n-placeholder / data-i18n-title;
+    // dynamic text goes through t(key, params). Excel sheet and column names
+    // are part of the file format: both Turkish and English names are read,
+    // and the template is generated in the active language.
+    // =====================================================================
+
+    const I18N = {
+      tr: {
+        "lang.switch": "Switch to English",
+        "theme.toggle": "Temayı değiştir",
+        "btn.api": "API Ayarları",
+        "btn.template": "Şablon İndir",
+        "btn.upload": "Excel Yükle",
+        "btn.validate": "Doğrula",
+        "btn.optimize": "Optimize Et",
+        "btn.generate": "Ziyaretleri Üret",
+        "btn.export": "Excel'e Aktar",
+        "btn.clear": "Temizle",
+        "btn.requestJson": "İstek JSON",
+        "side.person": "Personel",
+        "side.personLabel": "Rotası planlanacak personel",
+        "side.personHelp": "Her çalışma günü için tek araçlı ayrı bir istek gönderilir (Single Vehicle Routing).",
+        "side.route": "Rota Ayarları",
+        "side.start": "Başlangıç noktası (isteğe bağlı)",
+        "side.startPlaceholder": "enlem, boylam (örn. 40.9910, 29.0250)",
+        "side.pick": "Haritadan Seç",
+        "side.remove": "Kaldır",
+        "side.returnToStart": "Gün sonunda başlangıç noktasına dön",
+        "side.park": "Nokta başı park (dk)",
+        "side.break": "Toplam mola (dk)",
+        "side.period": "Planlama Dönemi",
+        "side.periodStart": "Başlangıç",
+        "side.periodEnd": "Bitiş",
+        "side.timezone": "Saat dilimi",
+        "side.traffic": "Araç rotalarında trafiği dikkate al",
+        "side.finishInWindow": "Ziyaret, saat aralığı bitmeden tamamlansın",
+        "side.skipHolidays": "Resmî tatillerde çalışılmaz (Türkiye)",
+        "side.solverTimeout": "Çözüm süresi",
+        "side.sec5": "5 saniye",
+        "side.sec15": "15 saniye",
+        "side.sec30": "30 saniye",
+        "side.sec60": "60 saniye",
+        "side.dayFill": "Günlük doluluk hedefi (tahmini)",
+        "side.dayFillHelp": "Günü serbest ziyaretler, dönemin başından itibaren mümkün olan en az güne toplanır; kalan günler boş kalır.",
+        "side.dataFile": "Veri Dosyası",
+        "side.sheets": "POI_LISTESI, ZIYARET_KURALLARI ve PERSONEL_ARACLAR sayfaları",
+        "side.summary": "Veri Özeti",
+        "side.visits": "Ziyaret",
+        "side.workDays": "Çalışma Günü",
+        "side.actions": "İşlemler",
+        "file.prompt": "Excel dosyası yükleyin",
+        "select.noData": "Önce Excel yükleyin",
+        "filter.allDays": "Tüm günler",
+        "tab.visits": "Oluşturulan Ziyaretler",
+        "tab.resources": "Çalışma Günleri",
+        "tab.results": "Rota Sonuçları",
+        "tab.skipped": "Atanamayanlar",
+        "tab.skippedTitle": "Atanamayan Ziyaretler",
+        "map.emptyTitle": "Haritayı görmek için API Ayarları'na Google Maps API anahtarınızı girin.",
+        "map.emptyNote": "Harita, Google Maps JavaScript API ile yüklenir.",
+        "map.walkingWarning": "Yaya rotaları Google'da beta aşamasındadır; bazı kaldırım ve yaya yolları eksik olabilir. Rotayı sahada kontrol edin.",
+        "map.startMarker": "{name} - başlangıç",
+        "stat.distance": "Toplam Mesafe",
+        "stat.duration": "Toplam Süre",
+        "stat.days": "Planlanan Gün",
+        "stat.visits": "Planlanan Ziyaret",
+        "table.search": "Tabloda ara...",
+        "table.empty": "Bu bölümde gösterilecek kayıt yok.",
+        "api.mapsKey": "Google Maps API anahtarı (harita için)",
+        "api.saveKey": "Anahtarı bu tarayıcıda hatırla",
+        "api.projectId": "Google Cloud proje kimliği (Project ID)",
+        "api.projectPlaceholder": "proje-kimligi",
+        "api.token": "OAuth erişim belirteci (isteğe bağlı, saklanmaz)",
+        "api.help": "API anahtarı yalnızca Google Maps haritası için kullanılır. Rota istekleri, uygulama Baslat.bat (yerel sunucu) ile açıldığında klasördeki servis hesabı anahtarıyla gönderilir; bu durumda proje kimliği ve belirteç gerekmez. Sunucusuz kullanımda (ör. GitHub Pages) proje kimliğini ve \"gcloud auth print-access-token\" ile alınan belirteci girin. Belirteç yaklaşık 1 saat geçerlidir ve saklanmaz.",
+        "api.clear": "Anahtarı temizle",
+        "api.use": "Kaydet",
+        "api.status.proxy": "Google bağlantısı hazır",
+        "api.status.token": "Erişim belirteci hazır",
+        "api.status.none": "Rota için bağlantı yok",
+        "modal.close": "Kapat",
+        "toast.keyCleared": "API anahtarı temizlendi",
+        "toast.keyClearedMsg": "Tarayıcıdaki kayıt silindi.",
+        "toast.mapNotReady": "Harita hazır değil",
+        "toast.mapNotReadyMsg": "Koordinatı elle yazın (enlem, boylam) ya da önce API Ayarları'na harita anahtarını girin.",
+        "toast.pickStart": "Başlangıç noktası",
+        "toast.pickStartMsg": "Haritada başlangıç noktasına tıklayın.",
+        "toast.mapLoadFail": "Harita yüklenemedi",
+        "toast.mapLoadFailMsg": "API anahtarını ve Maps JavaScript API kısıtlamalarını kontrol edin.",
+        "toast.fileLoaded": "Dosya yüklendi",
+        "toast.fileLoadedMsg": "{p} POI ve {r} ziyaret kuralı okundu.",
+        "toast.planned": "Ziyaret planı oluşturuldu",
+        "toast.plannedMsg": "{name}: {v} ziyaret, {d} çalışma günü.",
+        "toast.optDone": "Optimizasyon tamamlandı",
+        "toast.optDoneMsg": "{d} gün, {v} ziyaret planlandı.",
+        "toast.projectNeeded": "Proje kimliği gerekli",
+        "toast.projectNeededMsg": "Route Optimization API'nin etkin olduğu Google Cloud proje kimliğini girin.",
+        "msg.fileLoadedCheck": "Dosya yüklendi; kontrol gerekli",
+        "msg.excelReadFail": "Excel okunamadı",
+        "route.startInvalid": "Başlangıç noktası okunamadı; \"enlem, boylam\" biçiminde yazın. Şu an başlangıç noktası yok sayılıyor.",
+        "route.noStart": "Başlangıç noktası yok: her gün optimize edilen ilk ziyaretle başlar, son ziyarette biter.",
+        "route.startReturn": "Her gün başlangıç noktasından çıkılır ve gün sonunda oraya dönülür.",
+        "route.startNoReturn": "Her gün başlangıç noktasından çıkılır, son ziyarette biter.",
+        "route.parkBreak": "Park süresi yalnızca araçlı rotalarda her ziyaretin başına eklenir. Mola 12:00-14:00 arasında başlar.",
+        "warn.startInvalid": "Başlangıç noktası okunamadı (\"enlem, boylam\" biçiminde olmalı); plan başlangıç noktası olmadan yapıldı.",
+        "warn.missingReligious": "{years} yılı için dini bayram tarihleri uygulamada tanımlı değil; bu günleri Excel'deki TATILLER sayfasına ekleyin.",
+        "warn.notWorkDay": "{rule} ({name}): {date} personelin çalışma günü değil; ziyaret oluşturulmadı.",
+        "warn.noDay": "{rule} ({name}): dönemde uygun gün bulunamadı; ziyaret oluşturulmadı.",
+        "warn.overflow": "{n} ziyaret, dönemdeki {d} çalışma gününe doluluk hedefi içinde sığmadı; en uygun günlere eklendi, bazıları atanamayabilir. Aylık rut için planlama dönemini tam bir ay seçin (ör. ayın 1'i ile son günü).",
+        "val.missingId": "POI satır {row}: POI_ID eksik.",
+        "val.dupId": "Tekrarlanan POI_ID: {id}",
+        "val.noName": "{id}: POI adı eksik.",
+        "val.badCoord": "{id} ({name}): geçerli enlem/boylam yok. Adreslerden koordinat üretilmez; Excel'e enlem ve boylam girin.",
+        "val.ruleNoPoint": "{rule}: {poi} POI_LISTESI içinde bulunamadı.",
+        "val.ruleDuration": "{rule}: ziyaret süresi 0'dan büyük olmalı.",
+        "val.ruleWindow": "{rule}: saat başlangıcı bitişten önce olmalı.",
+        "val.noResources": "PERSONEL_ARACLAR sayfasında en az bir personel ya da araç olmalı.",
+        "val.startInvalid": "Rota Ayarları: başlangıç noktası \"enlem, boylam\" biçiminde olmalı (ör. 40.9910, 29.0250) ya da boş bırakılmalı.",
+        "val.mode": "{id}: ulaşım modu yalnızca ARAC veya YAYA olabilir.",
+        "val.workHours": "{id}: mesai başlangıcı bitişten önce olmalı.",
+        "val.noWorkDays": "Seçilen personelin planlama döneminde çalışma günü yok.",
+        "val.noVisits": "Seçilen personel ve dönem için ziyaret oluşmadı.",
+        "val.titleIssues": "Doğrulama sorunları",
+        "val.titleWarnings": "Doğrulama tamam; uyarılar var",
+        "val.titleOk": "Doğrulama başarılı",
+        "val.ok": "Excel verileri, ziyaret tarihleri, saat aralıkları ve koordinatlar doğrulandı (yerel kontrol).",
+        "opt.cannotStart": "Optimizasyon başlatılamadı",
+        "opt.notReady": "Google bağlantısı hazır değil",
+        "opt.notReady1": "Route Optimization API, API anahtarı kabul etmez; servis hesabı ya da OAuth erişim belirteci gerekir.",
+        "opt.notReady2": "Servis hesabının JSON anahtar dosyasını uygulama klasörüne koyup uygulamayı Baslat.bat ile açın (adres http://localhost:8765 olmalı).",
+        "opt.notReady3": "Ya da API Ayarları'na proje kimliğini ve bir OAuth erişim belirteci girin.",
+        "opt.confirm": "{d} gün için {v} ziyaret Google'a gönderilecek (gönderilen her ziyaret ücretlendirilir).",
+        "opt.confirmReused": "{n} gün değişmediği için yeniden gönderilmeyecek.",
+        "opt.confirmAsk": "Devam edilsin mi?",
+        "opt.progress": "{i} / {n} gün",
+        "opt.apiError": "Route Optimization API hatası",
+        "opt.partial": "{ok} gün çözüldü, {fail} gün çözülemedi.",
+        "opt.retry": "Çözülen günler saklandı; sorunu giderip tekrar Optimize Et'e bastığınızda yalnızca eksik günler gönderilir.",
+        "opt.requestsTitle": "Gönderilen istekler ({n} gün)",
+        "result.return": "Dönüş",
+        "result.returnName": "Başlangıç noktasına dönüş",
+        "skip.default": "Kısıtlar nedeniyle atanamadı",
+        "err.unknown": "Bilinmeyen hata",
+        "default.point": "Nokta {n}",
+        "default.resource": "Kaynak {n}",
+        "default.holiday": "Tatil",
+        "col.date": "Tarih",
+        "col.poiId": "POI ID",
+        "col.poiName": "POI Adı",
+        "col.window": "Saat Aralığı",
+        "col.durationMin": "Süre (dk)",
+        "col.rule": "Kural",
+        "col.assign": "Gün Ataması",
+        "col.mandatory": "Zorunlu",
+        "col.id": "ID",
+        "col.person": "Personel",
+        "col.mode": "Ulaşım",
+        "col.work": "Mesai",
+        "col.visitCount": "Ziyaret",
+        "col.load": "Tahmini Yük",
+        "col.start": "Başlangıç",
+        "col.end": "Bitiş",
+        "col.order": "Sıra",
+        "col.arrival": "Varış",
+        "col.park": "Park (dk)",
+        "col.visitMin": "Ziyaret (dk)",
+        "col.fromPrev": "Önceki Noktadan",
+        "col.travelMin": "Yol (dk)",
+        "col.reason": "Neden",
+        "val.auto": "Otomatik",
+        "val.fixed": "Sabit",
+        "common.yes": "Evet",
+        "common.no": "Hayır",
+        "mode.walking": "Yaya",
+        "mode.driving": "Araç",
+        "load.empty": "Boş",
+        "load.halfDay": " (yarım gün: {name})",
+        "load.holiday": "Tatil: {name}",
+        "start.firstVisit": "İlk ziyaret",
+        "end.lastVisit": "Son ziyaret",
+        "unit.duration": "{h} sa {m} dk",
+        "x.day": "Gün",
+        "x.personId": "Personel ID",
+        "x.person": "Personel",
+        "x.mode": "Ulaşım",
+        "x.order": "Sıra",
+        "x.address": "Adres",
+        "x.arrival": "Tahmini Varış",
+        "x.finish": "Tahmini Bitiş",
+        "x.park": "Park Süresi (dk)",
+        "x.visit": "Ziyaret Süresi (dk)",
+        "x.distance": "Önceki Noktadan Mesafe (km)",
+        "x.travel": "Seyahat Süresi (dk)",
+        "x.wait": "Bekleme Süresi (dk)",
+        "x.visits": "Ziyaret",
+        "x.start": "Başlangıç",
+        "x.end": "Bitiş",
+        "x.dayDistance": "Mesafe (km)",
+        "x.dayTravel": "Yol Süresi (dk)",
+        "x.dayTotal": "Toplam Süre (dk)",
+        "x.metric": "Gösterge",
+        "x.value": "Değer",
+        "x.sumPerson": "Personel",
+        "x.sumPlanned": "Planlanan ziyaret",
+        "x.sumSkipped": "Atanamayan ziyaret",
+        "x.sumDays": "Planlanan gün",
+        "x.sumDistance": "Toplam mesafe (km)",
+        "x.sumDuration": "Toplam süre",
+        "x.sheetRoute": "ROTA_PLANI",
+        "x.sheetDays": "GUN_OZETI",
+        "x.sheetSkipped": "ATANAMAYANLAR",
+        "x.sheetSummary": "OZET",
+        "x.filePrefix": "Rota_Plani_",
+        "x.templateFile": "Route_Optimizer_Sablonu.xlsx"
+      },
+      en: {
+        "lang.switch": "Türkçe'ye geç",
+        "theme.toggle": "Toggle theme",
+        "btn.api": "API Settings",
+        "btn.template": "Download Template",
+        "btn.upload": "Upload Excel",
+        "btn.validate": "Validate",
+        "btn.optimize": "Optimize",
+        "btn.generate": "Generate Visits",
+        "btn.export": "Export to Excel",
+        "btn.clear": "Clear",
+        "btn.requestJson": "Request JSON",
+        "side.person": "Staff",
+        "side.personLabel": "Staff member to plan",
+        "side.personHelp": "A separate single-vehicle request is sent for each working day (Single Vehicle Routing).",
+        "side.route": "Route Settings",
+        "side.start": "Start point (optional)",
+        "side.startPlaceholder": "latitude, longitude (e.g. 40.9910, 29.0250)",
+        "side.pick": "Pick on Map",
+        "side.remove": "Remove",
+        "side.returnToStart": "Return to the start point at the end of the day",
+        "side.park": "Parking per stop (min)",
+        "side.break": "Total break (min)",
+        "side.period": "Planning Period",
+        "side.periodStart": "Start",
+        "side.periodEnd": "End",
+        "side.timezone": "Time zone",
+        "side.traffic": "Consider traffic for driving routes",
+        "side.finishInWindow": "Finish each visit before its time window ends",
+        "side.skipHolidays": "No work on public holidays (Turkey)",
+        "side.solverTimeout": "Solver time",
+        "side.sec5": "5 seconds",
+        "side.sec15": "15 seconds",
+        "side.sec30": "30 seconds",
+        "side.sec60": "60 seconds",
+        "side.dayFill": "Daily fill target (estimated)",
+        "side.dayFillHelp": "Visits without a fixed day are packed into as few days as possible from the start of the period; the remaining days stay empty.",
+        "side.dataFile": "Data File",
+        "side.sheets": "POINTS, VISIT_RULES and RESOURCES sheets (Turkish sheet names also work)",
+        "side.summary": "Data Summary",
+        "side.visits": "Visits",
+        "side.workDays": "Work Days",
+        "side.actions": "Actions",
+        "file.prompt": "Upload an Excel file",
+        "select.noData": "Upload an Excel file first",
+        "filter.allDays": "All days",
+        "tab.visits": "Generated Visits",
+        "tab.resources": "Work Days",
+        "tab.results": "Route Results",
+        "tab.skipped": "Unassigned",
+        "tab.skippedTitle": "Unassigned Visits",
+        "map.emptyTitle": "Enter your Google Maps API key in API Settings to see the map.",
+        "map.emptyNote": "The map is loaded with the Google Maps JavaScript API.",
+        "map.walkingWarning": "Walking routes are in beta at Google; some sidewalks or footpaths may be missing. Check the route on site.",
+        "map.startMarker": "{name} - start",
+        "stat.distance": "Total Distance",
+        "stat.duration": "Total Time",
+        "stat.days": "Planned Days",
+        "stat.visits": "Planned Visits",
+        "table.search": "Search table...",
+        "table.empty": "Nothing to show in this section.",
+        "api.mapsKey": "Google Maps API key (for the map)",
+        "api.saveKey": "Remember the key in this browser",
+        "api.projectId": "Google Cloud Project ID",
+        "api.projectPlaceholder": "project-id",
+        "api.token": "OAuth access token (optional, not stored)",
+        "api.help": "The API key is only used for the Google Maps map. When the app is started with Baslat.bat (local server), route requests are sent with the service account key in the folder; no project ID or token is needed then. Without the server (e.g. on GitHub Pages), enter your project ID and a token from \"gcloud auth print-access-token\". The token is valid for about 1 hour and is not stored.",
+        "api.clear": "Clear key",
+        "api.use": "Save",
+        "api.status.proxy": "Connected to Google",
+        "api.status.token": "Access token ready",
+        "api.status.none": "No routing connection",
+        "modal.close": "Close",
+        "toast.keyCleared": "API key cleared",
+        "toast.keyClearedMsg": "The saved key was removed from this browser.",
+        "toast.mapNotReady": "Map not ready",
+        "toast.mapNotReadyMsg": "Type the coordinates (latitude, longitude) or enter a map key in API Settings first.",
+        "toast.pickStart": "Start point",
+        "toast.pickStartMsg": "Click the start point on the map.",
+        "toast.mapLoadFail": "Could not load the map",
+        "toast.mapLoadFailMsg": "Check the API key and its Maps JavaScript API restrictions.",
+        "toast.fileLoaded": "File loaded",
+        "toast.fileLoadedMsg": "{p} POIs and {r} visit rules read.",
+        "toast.planned": "Visit plan created",
+        "toast.plannedMsg": "{name}: {v} visits, {d} work days.",
+        "toast.optDone": "Optimization finished",
+        "toast.optDoneMsg": "{d} days, {v} visits planned.",
+        "toast.projectNeeded": "Project ID required",
+        "toast.projectNeededMsg": "Enter the Google Cloud project ID where the Route Optimization API is enabled.",
+        "msg.fileLoadedCheck": "File loaded; please review",
+        "msg.excelReadFail": "Could not read the Excel file",
+        "route.startInvalid": "The start point could not be read; use the \"latitude, longitude\" format. It is ignored for now.",
+        "route.noStart": "No start point: each day starts at the first optimized visit and ends at the last one.",
+        "route.startReturn": "Each day starts at the start point and returns there at the end of the day.",
+        "route.startNoReturn": "Each day starts at the start point and ends at the last visit.",
+        "route.parkBreak": "Parking time is added before each visit on driving routes only. The break starts between 12:00 and 14:00.",
+        "warn.startInvalid": "The start point could not be read (expected \"latitude, longitude\"); the plan was made without a start point.",
+        "warn.missingReligious": "Religious holiday dates are not defined in the app for {years}; add those days to the HOLIDAYS sheet in Excel.",
+        "warn.notWorkDay": "{rule} ({name}): {date} is not a working day for this staff member; no visit was created.",
+        "warn.noDay": "{rule} ({name}): no suitable day in the period; no visit was created.",
+        "warn.overflow": "{n} visits did not fit into the period's {d} work days within the fill target; they were added to the best days and some may stay unassigned. For a monthly round, choose a full calendar month as the planning period.",
+        "val.missingId": "POI row {row}: POI_ID is missing.",
+        "val.dupId": "Duplicate POI_ID: {id}",
+        "val.noName": "{id}: POI name is missing.",
+        "val.badCoord": "{id} ({name}): no valid latitude/longitude. Coordinates are not derived from addresses; add latitude and longitude in Excel.",
+        "val.ruleNoPoint": "{rule}: {poi} was not found in the POI list.",
+        "val.ruleDuration": "{rule}: visit duration must be greater than 0.",
+        "val.ruleWindow": "{rule}: window start must be before window end.",
+        "val.noResources": "The staff/resources sheet must contain at least one staff member or vehicle.",
+        "val.startInvalid": "Route Settings: the start point must be \"latitude, longitude\" (e.g. 40.9910, 29.0250) or left empty.",
+        "val.mode": "{id}: travel mode can only be DRIVING or WALKING.",
+        "val.workHours": "{id}: work start must be before work end.",
+        "val.noWorkDays": "The selected staff member has no work days in the planning period.",
+        "val.noVisits": "No visits were generated for the selected staff member and period.",
+        "val.titleIssues": "Validation issues",
+        "val.titleWarnings": "Validation passed with warnings",
+        "val.titleOk": "Validation passed",
+        "val.ok": "Excel data, visit dates, time windows and coordinates were validated (local check).",
+        "opt.cannotStart": "Optimization could not start",
+        "opt.notReady": "No connection to Google",
+        "opt.notReady1": "The Route Optimization API does not accept API keys; it needs a service account or an OAuth access token.",
+        "opt.notReady2": "Put the service account's JSON key file in the app folder and start the app with Baslat.bat (the address must be http://localhost:8765).",
+        "opt.notReady3": "Or enter your project ID and an OAuth access token in API Settings.",
+        "opt.confirm": "{v} visits for {d} days will be sent to Google (every visit sent is billed).",
+        "opt.confirmReused": "{n} unchanged days will not be sent again.",
+        "opt.confirmAsk": "Continue?",
+        "opt.progress": "{i} / {n} days",
+        "opt.apiError": "Route Optimization API error",
+        "opt.partial": "{ok} days solved, {fail} days not solved.",
+        "opt.retry": "Solved days were kept; after fixing the problem, press Optimize again and only the missing days will be sent.",
+        "opt.requestsTitle": "Sent requests ({n} days)",
+        "result.return": "Return",
+        "result.returnName": "Return to start point",
+        "skip.default": "Could not be assigned due to constraints",
+        "err.unknown": "Unknown error",
+        "default.point": "Point {n}",
+        "default.resource": "Resource {n}",
+        "default.holiday": "Holiday",
+        "col.date": "Date",
+        "col.poiId": "POI ID",
+        "col.poiName": "POI Name",
+        "col.window": "Time Window",
+        "col.durationMin": "Duration (min)",
+        "col.rule": "Rule",
+        "col.assign": "Day Assignment",
+        "col.mandatory": "Mandatory",
+        "col.id": "ID",
+        "col.person": "Staff",
+        "col.mode": "Travel",
+        "col.work": "Work Hours",
+        "col.visitCount": "Visits",
+        "col.load": "Estimated Load",
+        "col.start": "Start",
+        "col.end": "End",
+        "col.order": "Order",
+        "col.arrival": "Arrival",
+        "col.park": "Parking (min)",
+        "col.visitMin": "Visit (min)",
+        "col.fromPrev": "From Previous",
+        "col.travelMin": "Travel (min)",
+        "col.reason": "Reason",
+        "val.auto": "Auto",
+        "val.fixed": "Fixed",
+        "common.yes": "Yes",
+        "common.no": "No",
+        "mode.walking": "Walking",
+        "mode.driving": "Driving",
+        "load.empty": "Empty",
+        "load.halfDay": " (half day: {name})",
+        "load.holiday": "Holiday: {name}",
+        "start.firstVisit": "First visit",
+        "end.lastVisit": "Last visit",
+        "unit.duration": "{h} h {m} min",
+        "x.day": "Day",
+        "x.personId": "Staff ID",
+        "x.person": "Staff",
+        "x.mode": "Travel",
+        "x.order": "Order",
+        "x.address": "Address",
+        "x.arrival": "Estimated Arrival",
+        "x.finish": "Estimated Finish",
+        "x.park": "Parking (min)",
+        "x.visit": "Visit Duration (min)",
+        "x.distance": "Distance from Previous (km)",
+        "x.travel": "Travel Time (min)",
+        "x.wait": "Wait Time (min)",
+        "x.visits": "Visits",
+        "x.start": "Start",
+        "x.end": "End",
+        "x.dayDistance": "Distance (km)",
+        "x.dayTravel": "Travel Time (min)",
+        "x.dayTotal": "Total Time (min)",
+        "x.metric": "Metric",
+        "x.value": "Value",
+        "x.sumPerson": "Staff",
+        "x.sumPlanned": "Planned visits",
+        "x.sumSkipped": "Unassigned visits",
+        "x.sumDays": "Planned days",
+        "x.sumDistance": "Total distance (km)",
+        "x.sumDuration": "Total time",
+        "x.sheetRoute": "ROUTE_PLAN",
+        "x.sheetDays": "DAY_SUMMARY",
+        "x.sheetSkipped": "UNASSIGNED",
+        "x.sheetSummary": "SUMMARY",
+        "x.filePrefix": "Route_Plan_",
+        "x.templateFile": "Route_Optimizer_Template.xlsx"
+      }
+    };
+
+    let currentLang = "tr";
+
+    function t(key, params) {
+      const dict = I18N[currentLang] || I18N.tr;
+      let text = dict[key] != null ? dict[key] : (I18N.tr[key] != null ? I18N.tr[key] : key);
+      Object.keys(params || {}).forEach(function(name){ text = text.split("{" + name + "}").join(String(params[name])); });
+      return text;
+    }
+
+    // Warnings are kept as {k, p} so they can be shown in whichever language is active.
+    function msg(key, params) { return {k:key, p:params || {}}; }
+    function msgText(m) {
+      if (typeof m === "string") return m;
+      const p = Object.assign({}, m.p);
+      if (p.date) p.date = formatDateUi(p.date);
+      return t(m.k, p);
+    }
+    function uniqueMessages(list) {
+      const seen = new Set();
+      return list.filter(function(m){ const id = JSON.stringify(m); if (seen.has(id)) return false; seen.add(id); return true; });
+    }
+
+    // Holiday names may be {tr, en} pairs (built-in) or plain strings (from the user's Excel).
+    function holidayName(name) { return name && typeof name === "object" ? (name[currentLang] || name.tr) : String(name || ""); }
+
+    function applyStaticTranslations() {
+      document.documentElement.lang = currentLang;
+      document.querySelectorAll("[data-i18n]").forEach(function(el){ el.textContent = t(el.dataset.i18n); });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function(el){ el.placeholder = t(el.dataset.i18nPlaceholder); });
+      document.querySelectorAll("[data-i18n-title]").forEach(function(el){ el.title = t(el.dataset.i18nTitle); });
+      document.getElementById("lang-button").textContent = currentLang === "tr" ? "EN" : "TR";
+      if (!state.workbookName) document.getElementById("file-name").textContent = t("file.prompt");
+    }
+
+    function initLanguage() {
+      let saved = null;
+      try { saved = localStorage.getItem("route_optimizer_lang"); } catch (e) { /* storage unavailable */ }
+      currentLang = saved === "tr" || saved === "en" ? saved : ((navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en");
+      applyStaticTranslations();
+    }
+
+    function toggleLanguage() {
+      currentLang = currentLang === "tr" ? "en" : "tr";
+      try { localStorage.setItem("route_optimizer_lang", currentLang); } catch (e) { /* storage unavailable */ }
+      applyStaticTranslations();
+      syncRouteSettings();
+      updateApiStatus();
+      renderAll();
+    }
+
+    // =====================================================================
+    // Configuration and constants
+    // =====================================================================
+
+    const APP_CONFIG = {
+      routeOptimizationEndpoint: "",
+      timezone: "Europe/Istanbul",
+      utcOffset: "+03:00",
+      mapsLanguage: "tr",
+      mapsRegion: "TR"
+    };
+
+    // Browser storage keys. Older versions stored the key and project ID under
+    // "<prefix>_route_optimization_*" names; those are moved to the new names once on load.
+    const STORAGE_KEY = "route_optimizer_maps_api_key";
+    const CACHE_KEY = "route_optimizer_solve_cache";
+    const PROJECT_KEY = "route_optimizer_project_id";
+    const SETTINGS_KEY = "route_optimizer_route_settings";
+    const THEME_KEY = "route_optimizer_theme";
+    (function migrateLegacyStorage(){
+      try {
+        const moves = [[/_route_optimization_api_key$/, STORAGE_KEY], [/_route_optimization_project_id$/, PROJECT_KEY]];
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const oldKey = localStorage.key(i);
+          moves.forEach(function(m){
+            if (!m[0].test(oldKey)) return;
+            if (localStorage.getItem(m[1]) === null) localStorage.setItem(m[1], localStorage.getItem(oldKey));
+            localStorage.removeItem(oldKey);
+          });
+        }
+        if (localStorage.getItem(THEME_KEY) === null && localStorage.getItem("poi_theme") !== null) localStorage.setItem(THEME_KEY, localStorage.getItem("poi_theme"));
+      } catch (e) { /* storage unavailable */ }
+    })();
+    const DAY_SHORT = {
+      tr: ["Paz","Pzt","Sal","Çar","Per","Cum","Cmt"],
+      en: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
+    };
+    function dayShort(date) { return (DAY_SHORT[currentLang] || DAY_SHORT.tr)[dayNumber(date)]; }
+
+    // Turkish public holidays. Fixed-date ones repeat every year; religious holidays are listed per year.
+    const H = {
+      newYear:{tr:"Yılbaşı", en:"New Year's Day"},
+      sovereignty:{tr:"Ulusal Egemenlik ve Çocuk Bayramı", en:"National Sovereignty and Children's Day"},
+      labour:{tr:"Emek ve Dayanışma Günü", en:"Labour and Solidarity Day"},
+      youth:{tr:"Atatürk'ü Anma, Gençlik ve Spor Bayramı", en:"Commemoration of Atatürk, Youth and Sports Day"},
+      democracy:{tr:"Demokrasi ve Millî Birlik Günü", en:"Democracy and National Unity Day"},
+      victory:{tr:"Zafer Bayramı", en:"Victory Day"},
+      republic:{tr:"Cumhuriyet Bayramı", en:"Republic Day"},
+      republicEve:{tr:"Cumhuriyet Bayramı arifesi", en:"Republic Day eve"},
+      ramadan:{tr:"Ramazan Bayramı", en:"Ramadan Feast"},
+      sacrifice:{tr:"Kurban Bayramı", en:"Feast of Sacrifice"},
+      ramadanEve:{tr:"Ramazan Bayramı arifesi", en:"Ramadan Feast eve"},
+      sacrificeEve:{tr:"Kurban Bayramı arifesi", en:"Feast of Sacrifice eve"}
+    };
+    const FIXED_HOLIDAYS = {
+      "01-01":H.newYear, "04-23":H.sovereignty, "05-01":H.labour,
+      "05-19":H.youth, "07-15":H.democracy,
+      "08-30":H.victory, "10-29":H.republic
+    };
+    const RELIGIOUS_HOLIDAYS = {
+      "2026-03-20":H.ramadan, "2026-03-21":H.ramadan, "2026-03-22":H.ramadan,
+      "2026-05-27":H.sacrifice, "2026-05-28":H.sacrifice, "2026-05-29":H.sacrifice, "2026-05-30":H.sacrifice,
+      "2027-03-09":H.ramadan, "2027-03-10":H.ramadan, "2027-03-11":H.ramadan,
+      "2027-05-16":H.sacrifice, "2027-05-17":H.sacrifice, "2027-05-18":H.sacrifice, "2027-05-19":H.sacrifice
+    };
+    // Half days (work until 13:00): religious holiday eves. 28 October is added every year.
+    const RELIGIOUS_EVES = {
+      "2026-03-19":H.ramadanEve, "2026-05-26":H.sacrificeEve,
+      "2027-03-08":H.ramadanEve, "2027-05-15":H.sacrificeEve
+    };
+    const RELIGIOUS_YEARS = ["2026","2027"];
+    const DAY_ALIASES = {
+      "PAZAR":0,"PZ":0,"SUN":0,
+      "PAZARTESI":1,"PZT":1,"MON":1,
+      "SALI":2,"SAL":2,"TUE":2,
+      "CARSAMBA":3,"CAR":3,"WED":3,
+      "PERSEMBE":4,"PER":4,"THU":4,
+      "CUMA":5,"CUM":5,"FRI":5,
+      "CUMARTESI":6,"CMT":6,"SAT":6
+    };
+
+    const state = {
+      apiKey: localStorage.getItem(STORAGE_KEY) || "",
+      workbookName: "",
+      points: [],
+      rules: [],
+      resources: [],
+      visits: [],
+      expandedResources: [],
+      projectId: localStorage.getItem(PROJECT_KEY) || "",
+      accessToken: "",
+      selectedResourceId: "",
+      dayFilter: "",
+      dayPlans: [],
+      lastRequests: [],
+      solveCache: loadSolveCache(),
+      warnings: [],
+      holidays: [],
+      offDays: [],
+      resultRows: [],
+      skippedRows: [],
+      activeTab: "visits",
+      map: null,
+      mapsLoading: false,
+      markers: [],
+      polylines: []
+    };
+
+    // =====================================================================
+    // Startup and UI event wiring
+    // =====================================================================
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    function init() {
+      initLanguage();
+      setDefaultDates();
+      loadRouteSettings();
+      bindEvents();
+      initTheme();
+      updateApiStatus();
+      renderAll();
+      if (state.apiKey) loadGoogleMaps();
+      checkLocalServer();
+    }
+
+    function bindEvents() {
+      document.getElementById("theme-button").addEventListener("click", toggleTheme);
+      document.getElementById("lang-button").addEventListener("click", toggleLanguage);
+      document.getElementById("api-button").addEventListener("click", openApiModal);
+      document.getElementById("template-button").addEventListener("click", downloadTemplate);
+      document.getElementById("file-input").addEventListener("change", function(e){ if(e.target.files[0]) importWorkbook(e.target.files[0]); });
+      document.getElementById("dropzone").addEventListener("click", function(){ document.getElementById("file-input").click(); });
+      document.getElementById("dropzone").addEventListener("dragover", function(e){ e.preventDefault(); e.currentTarget.classList.add("drag"); });
+      document.getElementById("dropzone").addEventListener("dragleave", function(e){ e.currentTarget.classList.remove("drag"); });
+      document.getElementById("dropzone").addEventListener("drop", function(e){ e.preventDefault(); e.currentTarget.classList.remove("drag"); if(e.dataTransfer.files[0]) importWorkbook(e.dataTransfer.files[0]); });
+      document.getElementById("generate-button").addEventListener("click", generateVisitsAndResources);
+      document.getElementById("validate-button").addEventListener("click", validateAndReport);
+      document.getElementById("optimize-button").addEventListener("click", optimize);
+      document.getElementById("export-button").addEventListener("click", exportResults);
+      document.getElementById("clear-button").addEventListener("click", clearData);
+      document.getElementById("request-button").addEventListener("click", showRequestJson);
+      document.getElementById("use-key-button").addEventListener("click", saveApiKey);
+      document.getElementById("delete-key-button").addEventListener("click", clearApiKey);
+      document.querySelectorAll(".modal-close").forEach(function(btn){ btn.addEventListener("click", closeModals); });
+      document.querySelectorAll(".tab").forEach(function(btn){ btn.addEventListener("click", function(){ switchTab(btn.dataset.tab); }); });
+      document.getElementById("table-search").addEventListener("input", renderTable);
+      document.getElementById("resource-select").addEventListener("change", function(e){ state.selectedResourceId = e.target.value; generateVisitsAndResources(); });
+      document.getElementById("day-filter").addEventListener("change", function(e){ state.dayFilter = e.target.value; updateStats(); renderTable(); renderMap(); });
+      document.getElementById("plan-start").addEventListener("change", generateVisitsAndResources);
+      document.getElementById("plan-end").addEventListener("change", generateVisitsAndResources);
+      document.getElementById("day-fill").addEventListener("change", generateVisitsAndResources);
+      document.getElementById("skip-holidays").addEventListener("change", generateVisitsAndResources);
+      ["start-point","return-to-start","park-minutes","break-minutes"].forEach(function(id){
+        document.getElementById(id).addEventListener("change", generateVisitsAndResources);
+      });
+      document.getElementById("pick-start-button").addEventListener("click", toggleStartPick);
+      document.getElementById("clear-start-button").addEventListener("click", function(){
+        if (state.map) setStartPick(false);
+        document.getElementById("start-point").value = "";
+        generateVisitsAndResources();
+      });
+    }
+
+    // =====================================================================
+    // Route settings panel
+    // Entered in the panel (not read from Excel) and kept in the browser.
+    // =====================================================================
+
+    function loadRouteSettings() {
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {}; } catch (e) { saved = {}; }
+      if (typeof saved.startText === "string") document.getElementById("start-point").value = saved.startText;
+      if (typeof saved.returnToStart === "boolean") document.getElementById("return-to-start").checked = saved.returnToStart;
+      if (Number.isFinite(saved.parkMinutes)) document.getElementById("park-minutes").value = saved.parkMinutes;
+      if (Number.isFinite(saved.breakMinutes)) document.getElementById("break-minutes").value = saved.breakMinutes;
+      syncRouteSettings();
+    }
+
+    function minutesInput(id, max) {
+      const n = parseInt(document.getElementById(id).value, 10);
+      return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0;
+    }
+
+    function readRouteSettings() {
+      const text = document.getElementById("start-point").value.trim();
+      const pair = text ? parseCoordinatePair(text) : null;
+      const valid = !!pair && validCoordinate(pair.lat, pair.lng);
+      return {
+        startText:text,
+        start:valid ? pair : null,
+        startInvalid:!!text && !valid,
+        returnChecked:document.getElementById("return-to-start").checked,
+        returnToStart:valid && document.getElementById("return-to-start").checked,
+        parkMinutes:minutesInput("park-minutes", 120),
+        breakMinutes:minutesInput("break-minutes", 480)
+      };
+    }
+
+    // Paneldeki ayarları okur, saklar, yardım metnini günceller ve tüm personel satırlarına uygular.
+    function syncRouteSettings() {
+      const s = readRouteSettings();
+      state.routeSettings = s;
+      document.getElementById("park-minutes").value = s.parkMinutes;
+      document.getElementById("break-minutes").value = s.breakMinutes;
+      document.getElementById("return-to-start").disabled = !s.start;
+      document.getElementById("clear-start-button").disabled = !s.startText;
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({startText:s.startText, returnToStart:s.returnChecked, parkMinutes:s.parkMinutes, breakMinutes:s.breakMinutes}));
+      } catch (e) { /* saklanamazsa yalnız bu oturumda geçerli */ }
+      const lines = [];
+      if (s.startInvalid) lines.push(t("route.startInvalid"));
+      else if (!s.start) lines.push(t("route.noStart"));
+      else lines.push(s.returnToStart ? t("route.startReturn") : t("route.startNoReturn"));
+      lines.push(t("route.parkBreak"));
+      document.getElementById("route-settings-help").textContent = lines.join(" ");
+      state.resources.forEach(function(r){ applyRouteSettings(r, s); });
+      return s;
+    }
+
+    function applyRouteSettings(r, s) {
+      r.hasStart = !!s.start;
+      r.returnToStart = s.returnToStart;
+      r.startLat = s.start ? s.start.lat : NaN;
+      r.startLng = s.start ? s.start.lng : NaN;
+      r.endLat = s.returnToStart ? s.start.lat : NaN;
+      r.endLng = s.returnToStart ? s.start.lng : NaN;
+      r.parkMinutes = r.mode === "DRIVING" ? s.parkMinutes : 0;
+      r.breakDuration = s.breakMinutes;
+    }
+
+    function toggleStartPick() {
+      if (!state.map) {
+        showToast(t("toast.mapNotReady"), t("toast.mapNotReadyMsg"), "error");
+        return;
+      }
+      setStartPick(!state.pickingStart);
+      if (state.pickingStart) showToast(t("toast.pickStart"), t("toast.pickStartMsg"), "success");
+    }
+
+    function setStartPick(on) {
+      state.pickingStart = on;
+      state.map.setOptions({draggableCursor:on ? "crosshair" : null});
+      document.getElementById("pick-start-button").classList.toggle("primary", on);
+    }
+
+    function setDefaultDates() {
+      // Varsayılan dönem tam bir takvim ayı: ayın ilk günündeysek bu ay, değilsek gelecek ay.
+      const today = new Date();
+      const offset = today.getDate() === 1 ? 0 : 1;
+      const start = new Date(today.getFullYear(), today.getMonth() + offset, 1, 12);
+      const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0, 12);
+      document.getElementById("plan-start").value = formatDate(start);
+      document.getElementById("plan-end").value = formatDate(end);
+    }
+
+    function initTheme() {
+      let saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* storage unavailable */ }
+      document.documentElement.classList.toggle("dark", saved === "dark");
+      updateThemeIcon();
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("dark");
+      try { localStorage.setItem(THEME_KEY, document.documentElement.classList.contains("dark") ? "dark" : "light"); } catch (e) { /* storage unavailable */ }
+      updateThemeIcon();
+    }
+
+    // =====================================================================
+    // API settings, connection status and Google Maps loading
+    // =====================================================================
+
+    function updateThemeIcon() {
+      document.getElementById("theme-button").innerHTML = document.documentElement.classList.contains("dark") ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+    }
+
+    function openApiModal() {
+      document.getElementById("api-key-input").value = state.apiKey;
+      document.getElementById("project-id-input").value = state.projectId;
+      document.getElementById("access-token-input").value = state.accessToken;
+      document.getElementById("save-key-checkbox").checked = !!localStorage.getItem(STORAGE_KEY);
+      document.getElementById("api-modal").classList.add("open");
+    }
+    function closeModals() {
+      document.querySelectorAll(".modal-backdrop").forEach(function(el){ el.classList.remove("open"); });
+    }
+
+    function saveApiKey() {
+      const key = document.getElementById("api-key-input").value.trim();
+      state.apiKey = key;
+      state.projectId = document.getElementById("project-id-input").value.trim();
+      state.accessToken = document.getElementById("access-token-input").value.trim();
+      if (document.getElementById("save-key-checkbox").checked && key) localStorage.setItem(STORAGE_KEY, key);
+      else localStorage.removeItem(STORAGE_KEY);
+      if (state.projectId) localStorage.setItem(PROJECT_KEY, state.projectId);
+      else localStorage.removeItem(PROJECT_KEY);
+      updateApiStatus();
+      closeModals();
+      if (key) loadGoogleMaps();
+    }
+    function clearApiKey() {
+      state.apiKey = "";
+      state.accessToken = "";
+      localStorage.removeItem(STORAGE_KEY);
+      document.getElementById("api-key-input").value = "";
+      document.getElementById("access-token-input").value = "";
+      updateApiStatus();
+      closeModals();
+      showToast(t("toast.keyCleared"), t("toast.keyClearedMsg"), "success");
+    }
+    function updateApiStatus() {
+      const el = document.getElementById("api-status");
+      const hasToken = !!(state.accessToken && (state.projectId || APP_CONFIG.routeOptimizationEndpoint));
+      if (state.proxy || hasToken) {
+        el.className = "status ok";
+        el.innerHTML = '<i class="fa-solid fa-key"></i><span>' + escapeHtml(state.proxy ? t("api.status.proxy") : t("api.status.token")) + '</span>';
+      } else {
+        el.className = "status";
+        el.innerHTML = '<i class="fa-solid fa-key"></i><span>' + escapeHtml(t("api.status.none")) + '</span>';
+      }
+    }
+
+    // Uygulama server.js üzerinden açıldıysa ve klasörde servis hesabı anahtarı varsa istekler sunucudan gider.
+    async function checkLocalServer() {
+      state.proxy = false;
+      if (location.protocol === "http:" || location.protocol === "https:") {
+        try {
+          const status = await fetch("/api/status").then(function(r){ return r.json(); });
+          state.proxy = !!status.configured;
+        } catch (e) { state.proxy = false; }
+      }
+      updateApiStatus();
+    }
+    function loadGoogleMaps() {
+      if (!state.apiKey || state.map || state.mapsLoading || window.google && google.maps) {
+        if (window.google && google.maps && !state.map) createMap();
+        return;
+      }
+      state.mapsLoading = true;
+      window.__routeOptimizerMapReady = function(){ state.mapsLoading = false; createMap(); };
+      const script = document.createElement("script");
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(state.apiKey) + "&libraries=geometry&language=" + currentLang + "&region=" + APP_CONFIG.mapsRegion + "&callback=__routeOptimizerMapReady";
+      script.async = true;
+      script.defer = true;
+      script.onerror = function(){ state.mapsLoading = false; showToast(t("toast.mapLoadFail"), t("toast.mapLoadFailMsg"), "error"); };
+      document.head.appendChild(script);
+    }
+
+    function createMap() {
+      document.getElementById("map-empty").style.display = "none";
+      state.map = new google.maps.Map(document.getElementById("map"), {
+        center:{lat:41.0082,lng:28.9784}, zoom:11, mapTypeControl:true, streetViewControl:false, fullscreenControl:true
+      });
+      state.map.addListener("click", function(e){
+        if (!state.pickingStart) return;
+        setStartPick(false);
+        document.getElementById("start-point").value = coordText(e.latLng.lat(), e.latLng.lng());
+        generateVisitsAndResources();
+      });
+      renderMap();
+    }
+
+    // =====================================================================
+    // Excel import (Turkish and English sheet/column names are accepted)
+    // =====================================================================
+
+    async function importWorkbook(file) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, {type:"array", cellDates:true});
+        state.workbookName = file.name;
+        state.points = [];
+        state.rules = [];
+        state.resources = [];
+
+        const pointSheet = findSheet(wb, ["POI_LISTESI","POI","NOKTALAR","POINTS"]);
+        const ruleSheet = findSheet(wb, ["ZIYARET_KURALLARI","KURALLAR","VISIT_RULES"]);
+        const resourceSheet = findSheet(wb, ["PERSONEL_ARACLAR","PERSONEL","ARACLAR","RESOURCES"]);
+        const holidaySheet = findSheet(wb, ["TATILLER","TATIL","IZINLER","HOLIDAYS"]);
+        state.holidays = holidaySheet ? parseHolidays(sheetObjects(holidaySheet)) : [];
+
+        if (pointSheet) {
+          state.points = parsePoints(sheetObjects(pointSheet));
+          state.rules = ruleSheet ? parseRules(sheetObjects(ruleSheet)) : [];
+          addDefaultRules();
+          if (resourceSheet) state.resources = parseResources(sheetObjects(resourceSheet));
+        } else {
+          const first = wb.Sheets[wb.SheetNames[0]];
+          parseLegacySheet(sheetObjects(first));
+        }
+
+        document.getElementById("file-name").textContent = file.name;
+        generateVisitsAndResources();
+        switchTab("visits");
+        const issues = validateData().concat(uniqueMessages(state.warnings).map(msgText));
+        if (issues.length) showMessages(t("msg.fileLoadedCheck"), issues, true);
+        else showToast(t("toast.fileLoaded"), t("toast.fileLoadedMsg", {p:state.points.length, r:state.rules.length}), "success");
+      } catch (err) {
+        showMessages(t("msg.excelReadFail"), [friendlyError(err)], true);
+      }
+    }
+
+    function findSheet(wb, aliases) {
+      const wanted = aliases.map(normalizeText);
+      const name = wb.SheetNames.find(function(n){ return wanted.includes(normalizeText(n)); });
+      return name ? wb.Sheets[name] : null;
+    }
+
+    function sheetObjects(sheet) {
+      return XLSX.utils.sheet_to_json(sheet, {defval:"", raw:true});
+    }
+
+    function parsePoints(rows) {
+      return rows.filter(hasAnyValue).map(function(row, index){
+        const lat = toNumber(valueOf(row, ["ENLEM","LATITUDE","LAT"]));
+        const lng = toNumber(valueOf(row, ["BOYLAM","LONGITUDE","LNG","LON"]));
+        return {
+          id:String(valueOf(row, ["POI_ID","ID"]) || "POI-" + (index + 1)),
+          name:String(valueOf(row, ["POI_ADI","NOKTA_ADI","ISIM","NAME","POI_NAME"]) || t("default.point", {n:index + 1})),
+          city:String(valueOf(row, ["IL","CITY"]) || ""),
+          district:String(valueOf(row, ["ILCE","DISTRICT"]) || ""),
+          address:String(valueOf(row, ["ADRES","ADDRESS"]) || ""),
+          lat:lat, lng:lng,
+          region:String(valueOf(row, ["BOLGE","REGION"]) || ""),
+          people:splitList(valueOf(row, ["PERSONEL_ID","SORUMLU_PERSONEL","PERSONEL","RESOURCE_ID","ASSIGNED_TO"])),
+          teamGroup:String(valueOf(row, ["EKIP_GRUBU","TEAM_GROUP"]) || ""),
+          active:toBoolean(valueOf(row, ["AKTIF","ACTIVE"]), true),
+          note:String(valueOf(row, ["NOT","NOTE"]) || ""),
+          // Ziyaret kuralı sütunları: ZIYARET_KURALLARI sayfasında satırı olmayan noktalar için kullanılır.
+          duration:parseInt(valueOf(row, ["ZIYARET_SURESI_DK","SURE_DK","SURE","DURATION"]) || 20, 10),
+          hours:pointHours(row),
+          frequencyType:normalizeText(valueOf(row, ["FREKANS_TIPI","FREQUENCY_TYPE"]) || "AYLIK"),
+          frequencyCount:Math.max(1, parseInt(valueOf(row, ["AYLIK_ZIYARET_SAYISI","FREKANS_ADEDI","ZIYARET_SAYISI","MONTHLY_VISITS","FREQUENCY_COUNT"]) || 1, 10) || 1),
+          visitDays:String(valueOf(row, ["ZIYARET_GUNLERI","VISIT_DAYS","GUNLER"]) || ""),
+          minDayGap:Math.max(0, parseInt(valueOf(row, ["MIN_GUN_ARALIGI","MIN_DAY_GAP"]) || 0, 10) || 0)
+        };
+      });
+    }
+
+    function pointHours(row) {
+      const range = valueOf(row, ["ZIYARET_SAATLERI","ZIYARET_SAAT_ARALIGI","SAAT_ARALIGI","VISIT_HOURS","TIME_WINDOW"]);
+      if (range !== "") return parseWindow(range);
+      return {
+        start:parseTimeValue(valueOf(row, ["SAAT_BASLANGIC","WINDOW_START"])) || "09:00",
+        end:parseTimeValue(valueOf(row, ["SAAT_BITIS","WINDOW_END"])) || "18:00"
+      };
+    }
+
+    // ZIYARET_KURALLARI sayfasında kuralı olmayan her nokta için POI_LISTESI sütunlarından kural üretir.
+    function addDefaultRules() {
+      const withRule = new Set(state.rules.map(function(r){ return String(r.pointId); }));
+      state.points.forEach(function(p){
+        if (withRule.has(String(p.id))) return;
+        state.rules.push({
+          id:"A-" + p.id, pointId:String(p.id), startDate:"", endDate:"",
+          frequencyType:p.frequencyType, frequencyCount:p.frequencyCount, visitDays:p.visitDays, minDayGap:p.minDayGap,
+          windowStart:p.hours.start, windowEnd:p.hours.end, windowType:"ZORUNLU",
+          duration:p.duration, priority:3, mandatory:true, allowedPeople:[], note:p.note
+        });
+      });
+    }
+
+    function parseRules(rows) {
+      return rows.filter(hasAnyValue).map(function(row, index){
+        return {
+          id:String(valueOf(row, ["KURAL_ID","RULE_ID"]) || "KURAL-" + (index + 1)),
+          pointId:String(valueOf(row, ["POI_ID","POINT_ID","ID"]) || ""),
+          startDate:parseDateValue(valueOf(row, ["BASLANGIC_TARIHI","START_DATE"])),
+          endDate:parseDateValue(valueOf(row, ["BITIS_TARIHI","END_DATE"])),
+          frequencyType:normalizeText(valueOf(row, ["FREKANS_TIPI","FREQUENCY_TYPE","FREKANS"]) || "TEK_SEFER"),
+          frequencyCount:Math.max(1, parseInt(valueOf(row, ["FREKANS_ADEDI","FREQUENCY_COUNT","ARALIK_GUN"]) || 1, 10)),
+          visitDays:String(valueOf(row, ["ZIYARET_GUNLERI","VISIT_DAYS","GUNLER"]) || ""),
+          minDayGap:Math.max(0, parseInt(valueOf(row, ["MIN_GUN_ARALIGI","MIN_DAY_GAP"]) || 0, 10)),
+          windowStart:parseTimeValue(valueOf(row, ["SAAT_BASLANGIC","WINDOW_START","BASLANGIC_SAATI"])) || "09:00",
+          windowEnd:parseTimeValue(valueOf(row, ["SAAT_BITIS","WINDOW_END","BITIS_SAATI"])) || "18:00",
+          windowType:normalizeText(valueOf(row, ["ZAMAN_KISITI","WINDOW_TYPE"]) || "ZORUNLU"),
+          duration:Math.max(1, parseInt(valueOf(row, ["ZIYARET_SURESI_DK","SURE","DURATION"]) || 20, 10)),
+          priority:Math.min(5, Math.max(1, parseInt(valueOf(row, ["ONCELIK","PRIORITY"]) || 3, 10))),
+          mandatory:toBoolean(valueOf(row, ["ZORUNLU_ZIYARET","MANDATORY"]), true),
+          allowedPeople:splitList(valueOf(row, ["IZINLI_PERSONELLER","ALLOWED_PEOPLE","PERSONEL_ID"])),
+          note:String(valueOf(row, ["NOT","NOTE"]) || "")
+        };
+      });
+    }
+
+    function parseResources(rows) {
+      return rows.filter(hasAnyValue).map(function(row, index){
+        return {
+          id:String(valueOf(row, ["PERSONEL_ID","ARAC_ID","RESOURCE_ID","ID"]) || "KAYNAK-" + (index + 1)),
+          name:String(valueOf(row, ["PERSONEL_ADI","ARAC_ADI","RESOURCE_NAME","ISIM","NAME"]) || t("default.resource", {n:index + 1})),
+          date:parseDateValue(valueOf(row, ["TARIH","DATE"])),
+          workDays:String(valueOf(row, ["CALISMA_GUNLERI","WORK_DAYS"]) || ""),
+          workStart:parseTimeValue(valueOf(row, ["MESAI_BASLANGIC","WORK_START"])) || "08:30",
+          workEnd:parseTimeValue(valueOf(row, ["MESAI_BITIS","WORK_END"])) || "18:00",
+          // Başlangıç noktası, park ve mola süresi Excel'den okunmaz; paneldeki Rota Ayarları'ndan gelir.
+          mode:normalizeTravelMode(valueOf(row, ["ULASIM_MODU","TRAVEL_MODE"]) || "ARAC"),
+          region:String(valueOf(row, ["BOLGE","REGION"]) || ""),
+          skills:splitList(valueOf(row, ["YETKINLIKLER","SKILLS"]))
+        };
+      });
+    }
+
+    // İsteğe bağlı TATILLER sayfası: şirkete ya da kişiye özel çalışılmayan günler (izin, idari tatil).
+    function parseHolidays(rows) {
+      return rows.filter(hasAnyValue).map(function(row){
+        return {
+          date:parseDateValue(valueOf(row, ["TARIH","DATE"])),
+          name:String(valueOf(row, ["ACIKLAMA","AD","NOT","NAME","DESCRIPTION"]) || t("default.holiday")),
+          half:toBoolean(valueOf(row, ["YARIM_GUN","HALF_DAY"]), false),
+          people:splitList(valueOf(row, ["PERSONEL_ID","PERSONEL","RESOURCE_ID"]))
+        };
+      }).filter(function(h){ return h.date; });
+    }
+
+    // Verilen gün tatilse {name, half} döndürür. TATILLER sayfası her zaman, resmi tatiller kutu işaretliyse uygulanır.
+    function holidayInfo(date, personId) {
+      const custom = state.holidays.find(function(h){
+        return h.date === date && (!h.people.length || h.people.map(String).includes(String(personId)));
+      });
+      if (custom) return {name:custom.name, half:custom.half};
+      if (!document.getElementById("skip-holidays").checked) return null;
+      const monthDay = date.slice(5);
+      if (FIXED_HOLIDAYS[monthDay]) return {name:FIXED_HOLIDAYS[monthDay], half:false};
+      if (RELIGIOUS_HOLIDAYS[date]) return {name:RELIGIOUS_HOLIDAYS[date], half:false};
+      if (monthDay === "10-28") return {name:H.republicEve, half:true};
+      if (RELIGIOUS_EVES[date]) return {name:RELIGIOUS_EVES[date], half:true};
+      return null;
+    }
+
+    function parseLegacySheet(rows) {
+      const activeRows = rows.filter(hasAnyValue);
+      state.points = activeRows.map(function(row, index){
+        let lat = toNumber(valueOf(row, ["ENLEM","LATITUDE","LAT"]));
+        let lng = toNumber(valueOf(row, ["BOYLAM","LONGITUDE","LNG","LON"]));
+        const rawLocation = String(valueOf(row, ["ADRES_KOORDINAT","ADRES_COORDINATE","ADRES","ADDRESS","KONUM"]) || "");
+        const coords = parseCoordinatePair(rawLocation);
+        if (!Number.isFinite(lat) && coords) lat = coords.lat;
+        if (!Number.isFinite(lng) && coords) lng = coords.lng;
+        return {
+          id:String(valueOf(row, ["POI_ID","ID"]) || "POI-" + (index + 1)),
+          name:String(valueOf(row, ["POI_ADI","NOKTA_ADI","ISIM","NAME","POI_NAME"]) || t("default.point", {n:index + 1})),
+          address:rawLocation, city:"", district:"", lat:lat, lng:lng, region:"", people:[], teamGroup:"", active:true, note:""
+        };
+      });
+      state.rules = activeRows.map(function(row, index){
+        const window = parseWindow(valueOf(row, ["ZIYARET_SAAT_ARALIGI","SAAT_ARALIGI","WINDOW"]));
+        return {
+          id:"KURAL-" + (index + 1), pointId:state.points[index].id,
+          startDate:"", endDate:"",
+          frequencyType:normalizeText(valueOf(row, ["FREKANS_TIPI","FREKANS","SIKLIK"]) || "TEK_SEFER"),
+          frequencyCount:1, visitDays:String(valueOf(row, ["ZIYARET_GUNLERI","GUNLER"]) || ""),
+          minDayGap:0, windowStart:window.start, windowEnd:window.end, windowType:"ZORUNLU",
+          duration:Math.max(1, parseInt(valueOf(row, ["ZIYARET_SURESI_DK","SURE","DAKIKA","DURATION"]) || 20, 10)),
+          priority:3, mandatory:true, allowedPeople:[], note:""
+        };
+      });
+      state.resources = [];
+    }
+
+    function selectedResourceRows() {
+      return state.resources.filter(function(r){ return String(r.id) === String(state.selectedResourceId); });
+    }
+
+    function selectedResource() {
+      return selectedResourceRows()[0] || null;
+    }
+
+    function syncResourceSelect() {
+      const select = document.getElementById("resource-select");
+      const seen = new Set();
+      const options = [];
+      state.resources.forEach(function(r){
+        const id = String(r.id);
+        if (seen.has(id)) return;
+        seen.add(id);
+        options.push({id:id, name:r.name});
+      });
+      if (!seen.has(String(state.selectedResourceId))) state.selectedResourceId = options.length ? options[0].id : "";
+      select.innerHTML = options.length
+        ? options.map(function(o){ return '<option value="' + escapeAttr(o.id) + '">' + escapeHtml(o.id + " - " + o.name) + "</option>"; }).join("")
+        : '<option value="">' + escapeHtml(t("select.noData")) + '</option>';
+      select.value = state.selectedResourceId;
+      select.disabled = !options.length;
+    }
+
+    function syncDayFilter() {
+      const select = document.getElementById("day-filter");
+      const dates = state.expandedResources.map(function(r){ return r.date; });
+      if (!dates.includes(state.dayFilter)) state.dayFilter = "";
+      select.innerHTML = '<option value="">' + escapeHtml(t("filter.allDays")) + '</option>' + dates.map(function(d){
+        return '<option value="' + d + '">' + formatDateUi(d) + " " + dayShort(d) + "</option>";
+      }).join("");
+      select.value = state.dayFilter;
+    }
+
+    function ruleBelongsTo(rule, point, resource) {
+      const id = String(resource.id);
+      if (rule.allowedPeople.length) return rule.allowedPeople.map(String).includes(id);
+      if (point.people && point.people.length) return point.people.map(String).includes(id);
+      if (point.region && resource.region) return normalizeText(point.region) === normalizeText(resource.region);
+      return true;
+    }
+
+    function pushVisit(rule, point, date, flexible) {
+      state.visits.push({
+        id:rule.id + "|" + date,
+        ruleId:rule.id, pointId:point.id, pointName:point.name, address:point.address,
+        lat:point.lat, lng:point.lng, region:point.region, teamGroup:point.teamGroup,
+        date:date, duration:rule.duration, windowStart:rule.windowStart, windowEnd:rule.windowEnd,
+        windowType:rule.windowType, priority:rule.priority, mandatory:rule.mandatory,
+        allowedPeople:rule.allowedPeople, note:rule.note, flexible:flexible
+      });
+    }
+
+    function generateVisitsAndResources() {
+      const planStart = document.getElementById("plan-start").value;
+      const planEnd = document.getElementById("plan-end").value;
+      state.visits = [];
+      state.expandedResources = [];
+      state.dayPlans = [];
+      state.resultRows = [];
+      state.skippedRows = [];
+      state.warnings = [];
+      state.offDays = [];
+      document.getElementById("export-button").disabled = true;
+      document.getElementById("request-button").disabled = true;
+      syncResourceSelect();
+      const settings = syncRouteSettings();
+      if (settings.startInvalid) state.warnings.push(msg("warn.startInvalid"));
+
+      const rows = selectedResourceRows();
+      const resource = rows[0];
+      if (!planStart || !planEnd || planStart > planEnd || !resource) {
+        renderAll();
+        return;
+      }
+
+      // Seçilen personelin çalışma günleri: tarihe özel satır varsa o, yoksa çalışma günleri satırı.
+      enumerateDates(planStart, planEnd).forEach(function(date){
+        const row = rows.find(function(r){ return r.date === date; }) ||
+          rows.find(function(r){ return !r.date && dateMatchesDays(date, r.workDays); });
+        if (!row) return;
+        const day = Object.assign({}, row, {instanceId:row.id + "|" + date, date:date});
+        // Personel sayfasında o tarihe özel satır varsa bilerek çalışılıyor demektir; tatil uygulanmaz.
+        const holiday = row.date === date ? null : holidayInfo(date, row.id);
+        if (holiday && holiday.half) {
+          day.halfDay = holiday.name;
+          if (timeToMinutes(day.workEnd) > 13 * 60) day.workEnd = "13:00";
+          day.breakDuration = 0;
+        }
+        if (holiday && (!holiday.half || timeToMinutes(day.workStart) >= timeToMinutes(day.workEnd))) {
+          state.offDays.push({date:date, name:holiday.name, resource:row});
+          return;
+        }
+        state.expandedResources.push(day);
+      });
+      if (document.getElementById("skip-holidays").checked) {
+        const missing = unique([planStart.slice(0, 4), planEnd.slice(0, 4)]).filter(function(y){ return !RELIGIOUS_YEARS.includes(y); });
+        if (missing.length) state.warnings.push(msg("warn.missingReligious", {years:missing.join(", ")}));
+      }
+      const workDates = state.expandedResources.map(function(r){ return r.date; });
+      const workSet = new Set(workDates);
+
+      const pointMap = new Map(state.points.map(function(p){ return [String(p.id), p]; }));
+      const flexible = [];
+      state.rules.forEach(function(rule){
+        const point = pointMap.get(String(rule.pointId));
+        if (!point || !point.active || !ruleBelongsTo(rule, point, resource)) return;
+        const plan = expandRuleDates(rule, planStart, planEnd, workDates);
+        unique(plan.fixed).forEach(function(date){
+          if (workSet.has(date)) pushVisit(rule, point, date, false);
+          else state.warnings.push(msg("warn.notWorkDay", {rule:rule.id, name:point.name, date:date}));
+        });
+        plan.flexible.forEach(function(week){
+          flexible.push({rule:rule, point:point, days:week.days, count:week.count, gap:week.gap, period:week.period});
+        });
+        if (!plan.fixed.length && !plan.flexible.length) state.warnings.push(msg("warn.noDay", {rule:rule.id, name:point.name}));
+      });
+      assignFlexibleVisits(flexible, resource);
+      state.visits.sort(function(a,b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.pointName).localeCompare(String(b.pointName), "tr"); });
+
+      renderAll();
+      showToast(t("toast.planned"), t("toast.plannedMsg", {name:resource.name, v:state.visits.length, d:state.expandedResources.length}), "success");
+    }
+
+    // =====================================================================
+    // Day assignment heuristics
+    // Visits without a fixed day are spread over the period's work days:
+    // nearby points go to the same day, day loads stay balanced and the
+    // MIN_GUN_ARALIGI (minimum day gap) rule is respected. This is a local
+    // heuristic; Google only optimizes the order within each day.
+    // =====================================================================
+
+    function netCapacityMinutes(resource) {
+      return Math.max(60, timeToMinutes(resource.workEnd) - timeToMinutes(resource.workStart) - (resource.breakDuration || 0));
+    }
+
+    // Bir günün tahmini yükü (dk): ziyaret süreleri + kuş uçuşu en yakın komşu turundan tahmini yol.
+    // Kaba bir tahmindir; gerçek süreyi Google hesaplar.
+    function estimateDayMinutes(list, resource) {
+      const walking = resource.mode === "WALKING";
+      const left = list.slice();
+      let current = {lat:resource.startLat, lng:resource.startLng}, km = 0, service = 0;
+      if (!resource.hasStart && left.length) {
+        // Başlangıç noktası yok: tur, noktaların merkezine en uzak ziyaretten başlar (açık uçlu rota).
+        const center = centroid(left);
+        let far = 0;
+        left.forEach(function(x, i){ if (distanceKm(center, x) > distanceKm(center, left[far])) far = i; });
+        current = left.splice(far, 1)[0];
+        service += current.minutes;
+      }
+      while (left.length) {
+        let bestIndex = 0, bestKm = Infinity;
+        left.forEach(function(x, i){ const d = distanceKm(current, x); if (d < bestKm) { bestKm = d; bestIndex = i; } });
+        km += bestKm;
+        current = left.splice(bestIndex, 1)[0];
+        service += current.minutes;
+      }
+      if (list.length && resource.returnToStart) km += distanceKm(current, {lat:resource.endLat, lng:resource.endLng});
+      return service + km * 1.35 / (walking ? 4.5 : 22) * 60 + list.length * (walking ? 1 : resource.parkMinutes || 0);
+    }
+    function centroid(list) {
+      const valid = list.filter(function(x){ return validCoordinate(x.lat, x.lng); });
+      if (!valid.length) return {lat:NaN, lng:NaN};
+      return {
+        lat:valid.reduce(function(sum, x){ return sum + x.lat; }, 0) / valid.length,
+        lng:valid.reduce(function(sum, x){ return sum + x.lng; }, 0) / valid.length
+      };
+    }
+
+    // Günü serbest ziyaretleri günlere dağıtır. Ziyaretleri dönemin (hafta/ay) başından itibaren
+    // mümkün olan en az güne toplar; kalan günler boş kalır. Yakın noktaları aynı güne koyar.
+    function assignFlexibleVisits(items, resource) {
+      if (!items.length) return;
+      const capacity = netCapacityMinutes(resource);
+      const limit = capacity * Number(document.getElementById("day-fill").value || 80) / 100;
+      // Başlangıç noktası yoksa "ev" yerine noktaların merkezi kullanılır (uzak noktalar önce yerleşir).
+      const home = resource.hasStart ? {lat:resource.startLat, lng:resource.startLng} : centroid(items.map(function(it){ return it.point; }));
+      const entry = function(it){ return {lat:it.point.lat, lng:it.point.lng, minutes:it.rule.duration}; };
+      const pushRun = function(list, run){
+        run.chosen.forEach(function(pattern, index){
+          pattern.forEach(function(date){ pushVisit(list[index].rule, list[index].point, date, true); });
+        });
+      };
+      items.forEach(function(it){ it.homeKm = distanceKm(home, it.point); });
+
+      const groups = new Map();
+      items.forEach(function(it){
+        if (!groups.has(it.period)) groups.set(it.period, []);
+        groups.get(it.period).push(it);
+      });
+      const ordered = Array.from(groups.values()).map(function(group){
+        const all = new Set();
+        group.forEach(function(it){ it.days.forEach(function(d){ all.add(d); }); });
+        return {items:group, days:Array.from(all).sort()};
+      }).sort(function(a,b){ return a.days.length - b.days.length; });
+
+      ordered.forEach(function(group){
+        const free = group.items.filter(function(it){ return it.count === 1 && it.days.length === group.days.length; });
+        const rest = group.items.filter(function(it){ return !free.includes(it); });
+
+        // 1) Kısıtlı ziyaretler (izinli gün, ayda birden fazla) önce: dönemin tahminen gereken ilk günlerine.
+        if (rest.length) {
+          const need = group.items.reduce(function(sum, it){ return sum + it.count * (it.rule.duration + 12); }, 0);
+          const k = Math.min(group.days.length, Math.max(1, Math.ceil(need / limit)));
+          pushRun(rest, runAssignment(rest, new Set(group.days.slice(0, k)), resource, capacity));
+        }
+
+        // 2) Kısıtsız tek ziyaretler: günleri sırayla, tahmini doluluk sınırına kadar yakın noktalarla doldur.
+        const existing = {};
+        state.visits.forEach(function(v){
+          (existing[v.date] = existing[v.date] || []).push({lat:v.lat, lng:v.lng, minutes:v.duration});
+        });
+        const left = free.slice();
+        group.days.forEach(function(date){
+          if (!left.length) return;
+          const dayResource = state.expandedResources.find(function(r){ return r.date === date; }) || resource;
+          const dayLimit = limit * netCapacityMinutes(dayResource) / capacity;
+          fillDay((existing[date] || []).slice(), left, resource, dayLimit, entry).forEach(function(it){
+            pushVisit(it.rule, it.point, date, true);
+          });
+        });
+
+        // 3) Dönemin günlerine sığmayanlar: yine de en uygun günlere eklenir ve uyarı verilir.
+        if (left.length) {
+          state.warnings.push(msg("warn.overflow", {n:left.length, d:group.days.length}));
+          pushRun(left, runAssignment(left, new Set(group.days), resource, capacity));
+        }
+      });
+    }
+    // Bir günü doldurur: gün boşsa evden en uzak noktadan başlar, sonra gündeki noktalara en yakın
+    // noktayı ekler; tahmini yük sınırı aşılacağı anda durur. Eklenenleri left listesinden çıkarır.
+    function fillDay(members, left, resource, limit, entry) {
+      const added = [];
+      if (!members.length) {
+        let seed = 0;
+        left.forEach(function(it, i){ if (it.homeKm > left[seed].homeKm) seed = i; });
+        const first = left.splice(seed, 1)[0];
+        members.push(entry(first));
+        added.push(first);
+      }
+      while (left.length) {
+        let bestIndex = -1, bestKm = Infinity;
+        left.forEach(function(it, i){
+          let km = Infinity;
+          members.forEach(function(m){ const d = distanceKm(m, it.point); if (d < km) km = d; });
+          if (km < bestKm) { bestKm = km; bestIndex = i; }
+        });
+        const candidate = entry(left[bestIndex]);
+        if (estimateDayMinutes(members.concat([candidate]), resource) > limit) break;
+        members.push(candidate);
+        added.push(left.splice(bestIndex, 1)[0]);
+      }
+      return added;
+    }
+    function runAssignment(items, usable, resource, capacity) {
+      const ALLOWANCE = 10;
+      const days = {};
+      state.visits.forEach(function(v){
+        (days[v.date] = days[v.date] || []).push({lat:v.lat, lng:v.lng, minutes:v.duration, owner:null});
+      });
+      let totalMinutes = 0, homeSum = 0;
+      const work = items.map(function(it){
+        const gap = Math.max(1, it.gap || it.rule.minDayGap || 0);
+        let patterns = dayPatterns(it.days.filter(function(d){ return usable.has(d); }), it.count, gap);
+        // Kısıt (izinli gün, gün aralığı) dar pencereye sığmıyorsa noktanın tüm aday günlerine izin ver.
+        if (!patterns.length || patterns[0].length < Math.min(it.count, it.days.length)) patterns = dayPatterns(it.days, it.count, gap);
+        totalMinutes += it.count * (it.rule.duration + ALLOWANCE);
+        homeSum += it.homeKm;
+        return {it:it, patterns:patterns, chosen:[]};
+      });
+      const scale = Math.max(1, homeSum / items.length);
+      const target = Math.max(0.1, totalMinutes / (Math.max(1, usable.size) * capacity));
+
+      function dayCost(w, date) {
+        const list = days[date] || [];
+        let near = w.it.homeKm;
+        let minutes = w.it.rule.duration + ALLOWANCE;
+        list.forEach(function(x){
+          minutes += x.minutes + ALLOWANCE;
+          const km = distanceKm(x, w.it.point);
+          if (km < near) near = km;
+        });
+        const ratio = minutes / capacity;
+        let cost = near + scale * 0.5 * Math.pow(ratio / target, 2);
+        if (ratio > 1) cost += scale * 20 * (ratio - 1);
+        return cost;
+      }
+      function place(w, pattern) {
+        w.chosen = pattern;
+        pattern.forEach(function(date){
+          (days[date] = days[date] || []).push({lat:w.it.point.lat, lng:w.it.point.lng, minutes:w.it.rule.duration, owner:w});
+        });
+      }
+      function remove(w) {
+        w.chosen.forEach(function(date){ days[date] = days[date].filter(function(x){ return x.owner !== w; }); });
+        w.chosen = [];
+      }
+      function best(w) {
+        let bestPattern = w.patterns[0], bestCost = Infinity;
+        w.patterns.forEach(function(pattern){
+          const cost = pattern.reduce(function(sum, date){ return sum + dayCost(w, date); }, 0);
+          if (cost < bestCost - 1e-9) { bestCost = cost; bestPattern = pattern; }
+        });
+        return bestPattern;
+      }
+
+      const order = work.filter(function(w){ return w.patterns.length; })
+        .sort(function(a,b){ return b.it.count - a.it.count || b.it.homeKm - a.it.homeKm; });
+      order.forEach(function(w){ place(w, best(w)); });
+      for (let pass = 0; pass < 8; pass++) {
+        let changed = false;
+        order.forEach(function(w){
+          const before = w.chosen.join(",");
+          remove(w);
+          place(w, best(w));
+          if (w.chosen.join(",") !== before) changed = true;
+        });
+        if (!changed) break;
+      }
+
+      let maxLoad = 0, maxDate = "";
+      Object.keys(days).forEach(function(date){
+        if (!days[date].some(function(x){ return x.owner; })) return;
+        const load = estimateDayMinutes(days[date], resource);
+        if (load > maxLoad) { maxLoad = load; maxDate = date; }
+      });
+      return {chosen:work.map(function(w){ return w.chosen; }), maxLoad:maxLoad, maxDate:maxDate};
+    }
+    function dayPatterns(days, count, gap) {
+      count = Math.min(count, days.length);
+      if (count <= 0) return [];
+      for (let g = gap; g >= 1; g--) {
+        const out = [];
+        (function pick(startIndex, chosen){
+          if (chosen.length === count) { out.push(chosen.slice()); return; }
+          for (let i = startIndex; i < days.length && out.length < 3000; i++) {
+            if (chosen.length && daysBetween(chosen[chosen.length - 1], days[i]) < g) continue;
+            chosen.push(days[i]);
+            pick(i + 1, chosen);
+            chosen.pop();
+          }
+        })(0, []);
+        if (out.length) return out;
+      }
+      return [];
+    }
+    // fixed: tarihi kuralla belirlenen ziyaretler. flexible: haftası belli, günü atanacak ziyaretler.
+    function expandRuleDates(rule, planStart, planEnd, workDates) {
+      const result = {fixed:[], flexible:[]};
+      const start = maxDate(planStart, rule.startDate || planStart);
+      const end = minDate(planEnd, rule.endDate || planEnd);
+      if (!start || !end || start > end) return result;
+      const allDates = enumerateDates(start, end);
+      const workInRange = workDates.filter(function(d){ return d >= start && d <= end; });
+      const type = normalizeText(rule.frequencyType);
+      const specifiedDays = parseDayNumbers(rule.visitDays);
+      const single = function(){ result.fixed = [workInRange.length ? workInRange[0] : start]; return result; };
+
+      if (type.includes("TEK") || type === "ONCE" || type === "SINGLE") return single();
+      if (type.includes("GUNLUK") || type === "DAILY") {
+        result.fixed = specifiedDays.length ? allDates.filter(function(d){ return specifiedDays.includes(dayNumber(d)); }) : workInRange;
+        return result;
+      }
+      if (type.includes("HER_X") || type.includes("ARALIK") || type === "INTERVAL") {
+        const step = Math.max(1, rule.frequencyCount || rule.minDayGap || 1);
+        const anchor = rule.startDate || planStart;
+        allDates.forEach(function(d){
+          if (daysBetween(anchor, d) % step !== 0) return;
+          // Çalışılmayan güne denk gelirse, bir sonraki ziyaretten önceki ilk çalışma gününe kaydır.
+          const shifted = workInRange.find(function(w){ return w >= d && daysBetween(d, w) < step; });
+          result.fixed.push(shifted || d);
+        });
+        return result;
+      }
+      if (type.includes("AYLIK") || type === "MONTHLY") {
+        const monthDays = splitList(rule.visitDays).map(Number).filter(function(n){ return n >= 1 && n <= 31; });
+        if (monthDays.length) {
+          result.fixed = allDates.filter(function(d){ return monthDays.includes(parseDate(d).getDate()); });
+          return result;
+        }
+        // Ayın günü yazılmadıysa: her takvim ayında FREKANS_ADEDI kez, günleri uygulama seçer.
+        // Gün adı yazıldıysa (ör. SALI) yalnız o günler aday olur.
+        const monthly = Math.max(1, rule.frequencyCount || 1);
+        const months = new Map();
+        workInRange.forEach(function(d){
+          if (specifiedDays.length && !specifiedDays.includes(dayNumber(d))) return;
+          const key = d.slice(0, 7);
+          if (!months.has(key)) months.set(key, []);
+          months.get(key).push(d);
+        });
+        months.forEach(function(days, month){
+          if (monthly <= 2) {
+            result.flexible.push({days:days, count:Math.min(monthly, days.length), gap:rule.minDayGap || (monthly === 2 ? 10 : 1), period:"M" + month});
+            return;
+          }
+          // 3 ve üzeri: ayı eşit parçalara böl, her parçadan bir gün seçilsin.
+          const parts = Math.min(monthly, days.length);
+          for (let i = 0; i < parts; i++) {
+            const chunk = days.slice(Math.floor(i * days.length / parts), Math.floor((i + 1) * days.length / parts));
+            result.flexible.push({days:chunk, count:1, gap:1, period:"M" + month});
+          }
+        });
+        return result;
+      }
+
+      const directDay = DAY_ALIASES[type];
+      if (directDay !== undefined) {
+        result.fixed = allDates.filter(function(d){ return dayNumber(d) === directDay; });
+        return result;
+      }
+
+      if (type.includes("HAFTALIK") || type === "WEEKLY" || specifiedDays.length) {
+        if (specifiedDays.length) {
+          result.fixed = allDates.filter(function(d){ return specifiedDays.includes(dayNumber(d)); });
+          return result;
+        }
+        const count = Math.min(7, Math.max(1, rule.frequencyCount || 1));
+        const weeks = new Map();
+        workInRange.forEach(function(d){
+          const key = weekKey(d);
+          if (!weeks.has(key)) weeks.set(key, []);
+          weeks.get(key).push(d);
+        });
+        weeks.forEach(function(days, week){ result.flexible.push({days:days, count:Math.min(count, days.length), period:"W" + week}); });
+        return result;
+      }
+      return single();
+    }
+    function validateData() {
+      const issues = [];
+      const pointIds = new Set();
+      state.points.forEach(function(p, i){
+        if (!p.id) issues.push(t("val.missingId", {row:i + 2}));
+        if (pointIds.has(p.id)) issues.push(t("val.dupId", {id:p.id}));
+        pointIds.add(p.id);
+        if (!p.name) issues.push(t("val.noName", {id:p.id}));
+        if (!validCoordinate(p.lat, p.lng)) issues.push(t("val.badCoord", {id:p.id, name:p.name}));
+      });
+      state.rules.forEach(function(r){
+        if (!pointIds.has(r.pointId)) issues.push(t("val.ruleNoPoint", {rule:r.id, poi:r.pointId}));
+        if (!(r.duration > 0)) issues.push(t("val.ruleDuration", {rule:r.id}));
+        if (timeToMinutes(r.windowStart) >= timeToMinutes(r.windowEnd)) issues.push(t("val.ruleWindow", {rule:r.id}));
+      });
+      if (!state.resources.length) issues.push(t("val.noResources"));
+      if (state.routeSettings && state.routeSettings.startInvalid) issues.push(t("val.startInvalid"));
+      state.resources.forEach(function(r){
+        if (!["DRIVING","WALKING"].includes(r.mode)) issues.push(t("val.mode", {id:r.id}));
+        if (timeToMinutes(r.workStart) >= timeToMinutes(r.workEnd)) issues.push(t("val.workHours", {id:r.id}));
+      });
+      if (state.resources.length && !state.expandedResources.length) issues.push(t("val.noWorkDays"));
+      if (state.expandedResources.length && !state.visits.length) issues.push(t("val.noVisits"));
+      return unique(issues);
+    }
+    function validateAndReport() {
+      if (state.rules.length && !state.visits.length) generateVisitsAndResources();
+      const issues = validateData();
+      const warnings = uniqueMessages(state.warnings).map(msgText);
+      if (issues.length) showMessages(t("val.titleIssues"), issues.concat(warnings), true);
+      else if (warnings.length) showMessages(t("val.titleWarnings"), warnings, true);
+      else showMessages(t("val.titleOk"), [t("val.ok")], false);
+    }
+
+    // =====================================================================
+    // Route Optimization API: request building, sending and results
+    // =====================================================================
+    // Tek personel, tek gün: istekte tek araç olduğu için Single Vehicle Routing olarak faturalanır.
+    function buildDayRequest(r, dayVisits) {
+      const finishInWindow = document.getElementById("finish-in-window").checked;
+      const vehicle = {
+        displayName:clipName(r.name + " - " + formatDateTr(r.date)),
+        label:r.instanceId,
+        travelMode:r.mode,
+        startTimeWindows:[{startTime:toIso(r.date,r.workStart), endTime:addMinutesIso(toIso(r.date,r.workStart),15)}],
+        endTimeWindows:[{startTime:toIso(r.date,r.workStart), endTime:toIso(r.date,r.workEnd)}],
+        costPerTraveledHour:1,
+        costPerHour:0.05
+      };
+      // Başlangıç noktası verilmezse araç ilk ziyarette başlar; bitiş verilmezse son ziyarette biter.
+      if (r.hasStart) vehicle.startLocation = {latitude:r.startLat, longitude:r.startLng};
+      if (r.hasStart && r.returnToStart) vehicle.endLocation = {latitude:r.endLat, longitude:r.endLng};
+      if (r.breakDuration > 0) {
+        // Mola 12:00-14:00 arasında başlar; mesai bu aralığa uymuyorsa mesai içinde herhangi bir an.
+        const workStart = timeToMinutes(r.workStart), workEnd = timeToMinutes(r.workEnd);
+        let earliest = Math.max(12 * 60, workStart), latest = Math.min(14 * 60, workEnd - r.breakDuration);
+        if (latest < earliest) { earliest = workStart; latest = workEnd - r.breakDuration; }
+        if (latest >= earliest) {
+          vehicle.breakRule = {breakRequests:[{
+            earliestStartTime:toIso(r.date,minutesToTime(earliest)),
+            latestStartTime:toIso(r.date,minutesToTime(latest)),
+            minDuration:String(r.breakDuration * 60) + "s"
+          }]};
+        }
+      }
+
+      // Park süresi ziyaretin başına eklenir: varış + park + ziyaret.
+      const park = r.parkMinutes || 0;
+      const shipments = dayVisits.map(function(v){
+        const startIso = toIso(v.date,v.windowStart);
+        let endIso = toIso(v.date,v.windowEnd);
+        if (finishInWindow) endIso = addMinutesIso(endIso, -(v.duration + park));
+        if (new Date(endIso) < new Date(startIso)) endIso = startIso;
+        let timeWindow;
+        if (normalizeText(v.windowType).includes("ESNEK") || normalizeText(v.windowType) === "SOFT") {
+          timeWindow = {
+            startTime:toIso(v.date,"00:00"), endTime:toIso(v.date,"23:59"),
+            softStartTime:startIso, softEndTime:endIso,
+            costPerHourBeforeSoftStartTime:v.priority * 5,
+            costPerHourAfterSoftEndTime:v.priority * 10
+          };
+        } else {
+          timeWindow = {startTime:startIso, endTime:endIso};
+        }
+        const shipment = {
+          displayName:clipName(v.pointName + " - " + formatDateTr(v.date)),
+          label:v.id,
+          deliveries:[{
+            arrivalLocation:{latitude:v.lat, longitude:v.lng},
+            timeWindows:[timeWindow],
+            duration:String((v.duration + park) * 60) + "s",
+            label:v.pointId
+          }]
+        };
+        if (!v.mandatory) shipment.penaltyCost = 100 * v.priority;
+        return shipment;
+      });
+
+      return {
+        timeout:document.getElementById("solver-timeout").value + "s",
+        considerRoadTraffic:r.mode === "DRIVING" && document.getElementById("consider-traffic").checked,
+        populatePolylines:true,
+        populateTransitionPolylines:true,
+        label:"route-optimizer-" + r.instanceId,
+        model:{
+          globalStartTime:toIso(r.date,"00:00"),
+          globalEndTime:toIso(addDays(r.date,1),"00:00"),
+          shipments:shipments,
+          vehicles:[vehicle]
+        }
+      };
+    }
+    async function optimize() {
+      if (!state.visits.length) generateVisitsAndResources();
+      const issues = validateData();
+      if (issues.length) {
+        showMessages(t("opt.cannotStart"), issues, true);
+        return;
+      }
+      await checkLocalServer();
+      if (!state.proxy && !state.accessToken) {
+        showMessages(t("opt.notReady"), [t("opt.notReady1"), t("opt.notReady2"), t("opt.notReady3")], true);
+        return;
+      }
+      if (!state.proxy && !APP_CONFIG.routeOptimizationEndpoint && !state.projectId) {
+        openApiModal();
+        showToast(t("toast.projectNeeded"), t("toast.projectNeededMsg"), "error");
+        return;
+      }
+
+      // Her çalışma günü için tek araçlı ayrı istek. Değişmeyen günler önbellekten gelir, yeniden faturalanmaz.
+      const jobs = state.expandedResources.map(function(r){
+        const visits = state.visits.filter(function(v){ return v.date === r.date; });
+        if (!visits.length) return null;
+        const request = buildDayRequest(r, visits);
+        const key = JSON.stringify(request);
+        const cached = state.solveCache[r.instanceId];
+        // Older versions used a different request label prefix; ignore the prefix when comparing
+        // so days solved by an older version are not sent (and billed) again.
+        const sameRequest = function(a, b){
+          const strip = function(s){ return String(s || "").replace(/"label":"[a-z]+-route-/, '"label":"route-optimizer-'); };
+          return strip(a) === strip(b);
+        };
+        const hit = cached && sameRequest(cached.key, key);
+        return {resource:r, visits:visits, request:request, key:key, response:hit ? cached.response : null};
+      }).filter(Boolean);
+      const pending = jobs.filter(function(j){ return !j.response; });
+      if (pending.length) {
+        const billable = pending.reduce(function(sum, j){ return sum + j.visits.length; }, 0);
+        const reused = jobs.length - pending.length;
+        const text = t("opt.confirm", {d:pending.length, v:billable}) +
+          (reused ? "\n" + t("opt.confirmReused", {n:reused}) : "") + "\n\n" + t("opt.confirmAsk");
+        if (!window.confirm(text)) return;
+      }
+
+      const button = document.getElementById("optimize-button");
+      button.disabled = true;
+      const endpoint = state.proxy ? "/api/optimizeTours" : APP_CONFIG.routeOptimizationEndpoint || "https://routeoptimization.googleapis.com/v1/projects/" + encodeURIComponent(state.projectId) + ":optimizeTours";
+      const headers = {"Content-Type":"application/json"};
+      if (state.proxy) {
+        // Yetkilendirmeyi yerel sunucu (server.js) servis hesabıyla yapar.
+      } else if (state.accessToken) {
+        headers["Authorization"] = "Bearer " + state.accessToken;
+        if (state.projectId) headers["X-Goog-User-Project"] = state.projectId;
+      } else {
+        headers["X-Goog-Api-Key"] = state.apiKey;
+      }
+      let failure = null;
+      try {
+        for (let i = 0; i < pending.length; i++) {
+          const job = pending[i];
+          button.innerHTML = '<i class="fa-solid fa-spinner spinner"></i> ' + escapeHtml(t("opt.progress", {i:i + 1, n:pending.length}));
+          const response = await fetch(endpoint, {method:"POST", headers:headers, body:JSON.stringify(job.request)});
+          const payload = await response.json().catch(function(){ return {}; });
+          if (!response.ok) throw new Error(formatDateUi(job.resource.date) + ": " + extractApiError(payload, response.status));
+          job.response = payload;
+          state.solveCache[job.resource.instanceId] = {key:job.key, response:payload};
+          saveSolveCache();
+        }
+      } catch (err) {
+        failure = err;
+      } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="btn.optimize">' + escapeHtml(t("btn.optimize")) + '</span>';
+      }
+
+      state.dayPlans = jobs.filter(function(j){ return j.response; });
+      document.getElementById("request-button").disabled = !jobs.length;
+      state.lastRequests = jobs.map(function(j){ return j.request; });
+      processDayPlans();
+      if (state.dayPlans.length) switchTab("results");
+      if (failure) {
+        showMessages(t("opt.apiError"), [
+          friendlyError(failure),
+          t("opt.partial", {ok:state.dayPlans.length, fail:jobs.length - state.dayPlans.length}),
+          t("opt.retry")
+        ], true);
+      } else {
+        const planned = state.resultRows.filter(function(r){ return !r.isReturn; }).length;
+        showToast(t("toast.optDone"), t("toast.optDoneMsg", {d:state.dayPlans.length, v:planned}), "success");
+      }
+    }
+    function processDayPlans() {
+      state.resultRows = [];
+      state.skippedRows = [];
+      state.dayPlans.forEach(function(plan, dayIndex){
+        const payload = plan.response || {};
+        const resource = plan.resource;
+        const route = (payload.routes || [])[0] || {};
+        const visits = route.visits || [];
+        const transitions = route.transitions || [];
+        plan.planned = 0;
+        visits.forEach(function(visit, visitIndex){
+          const source = plan.visits[numberOrDefault(visit.shipmentIndex, 0)];
+          if (!source) return;
+          const transition = transitions[visitIndex] || {};
+          const start = visit.startTime || "";
+          plan.planned++;
+          state.resultRows.push({
+            date:resource.date, resourceId:resource.id, resourceName:resource.name, mode:resource.mode,
+            order:visitIndex + 1, pointId:source.pointId, pointName:source.pointName, address:source.address,
+            start:start, end:start ? addMinutesIso(start,source.duration + (resource.parkMinutes || 0)) : "",
+            duration:source.duration, park:resource.parkMinutes || 0, distanceMeters:Number(transition.travelDistanceMeters || 0),
+            travelSeconds:durationSeconds(transition.travelDuration), waitSeconds:durationSeconds(transition.waitDuration),
+            routeIndex:dayIndex, lat:source.lat, lng:source.lng,
+            window:source.windowStart + "-" + source.windowEnd, isReturn:false
+          });
+        });
+        if (plan.planned && resource.returnToStart) {
+          const back = transitions[visits.length] || {};
+          state.resultRows.push({
+            date:resource.date, resourceId:resource.id, resourceName:resource.name, mode:resource.mode,
+            order:"", pointId:"", pointName:"", address:"",
+            start:route.vehicleEndTime || "", end:"", duration:"", park:"",
+            distanceMeters:Number(back.travelDistanceMeters || 0),
+            travelSeconds:durationSeconds(back.travelDuration), waitSeconds:durationSeconds(back.waitDuration),
+            routeIndex:dayIndex, lat:resource.endLat, lng:resource.endLng, window:"", isReturn:true
+          });
+        }
+        const metrics = route.metrics || {};
+        plan.distanceMeters = Number(metrics.travelDistanceMeters || 0);
+        plan.totalSeconds = durationSeconds(metrics.totalDuration);
+        plan.travelSeconds = durationSeconds(metrics.travelDuration);
+        plan.startTime = route.vehicleStartTime || "";
+        plan.endTime = route.vehicleEndTime || "";
+
+        (payload.skippedShipments || []).forEach(function(skipped){
+          const source = plan.visits[numberOrDefault(skipped.index, numberOrDefault(skipped.shipmentIndex,0))];
+          state.skippedRows.push({
+            pointId:source ? source.pointId : "",
+            pointName:source ? source.pointName : skipped.label || "",
+            date:resource.date,
+            reason:formatSkippedReasons(skipped),
+            mandatory:source ? source.mandatory : ""
+          });
+        });
+      });
+      document.getElementById("export-button").disabled = !state.resultRows.length && !state.skippedRows.length;
+      renderAll();
+    }
+
+    function updateStats() {
+      const plans = state.dayPlans.filter(function(p){ return !state.dayFilter || p.resource.date === state.dayFilter; });
+      const sum = function(field){ return plans.reduce(function(total, p){ return total + (p[field] || 0); }, 0); };
+      document.getElementById("stat-distance").textContent = formatDistance(sum("distanceMeters")).replace(/^0 m$/, "0 km");
+      document.getElementById("stat-duration").textContent = formatDuration(plans.length ? sum("totalSeconds") : 0);
+      document.getElementById("stat-used").textContent = plans.filter(function(p){ return p.planned; }).length;
+      document.getElementById("stat-planned").textContent = sum("planned");
+    }
+    function renderAll() {
+      document.getElementById("point-count").textContent = state.points.length;
+      document.getElementById("visit-count").textContent = state.visits.length;
+      document.getElementById("resource-count").textContent = state.expandedResources.length;
+      syncResourceSelect();
+      syncDayFilter();
+      updateStats();
+      renderTable();
+      renderMap();
+    }
+    function switchTab(tab) {
+      state.activeTab = tab;
+      document.querySelectorAll(".tab").forEach(function(btn){ btn.classList.toggle("active", btn.dataset.tab === tab); });
+      renderTable();
+      renderMap();
+    }
+
+    // =====================================================================
+    // Tables and map
+    // =====================================================================
+
+    function modeLabel(mode) { return mode === "WALKING" ? t("mode.walking") : t("mode.driving"); }
+    function resultOrder(r) { return r.isReturn ? t("result.return") : r.order; }
+    function resultName(r) { return r.isReturn ? t("result.returnName") : r.pointName; }
+
+    function renderTable() {
+      const query = normalizeText(document.getElementById("table-search").value || "");
+      const container = document.getElementById("table-container");
+      const title = document.getElementById("table-title");
+      let columns = [];
+      let rows = [];
+
+      const yesNo = function(v){ return v === true ? t("common.yes") : v === false ? t("common.no") : ""; };
+      const setTitle = function(icon, key){ title.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + escapeHtml(t(key)); };
+
+      if (state.activeTab === "visits") {
+        setTitle("fa-location-dot", "tab.visits");
+        columns = [["date","col.date"],["pointId","col.poiId"],["pointName","col.poiName"],["window","col.window"],["duration","col.durationMin"],["frequency","col.rule"],["assign","col.assign"],["mandatory","col.mandatory"]];
+        rows = state.visits.map(function(v){ return Object.assign({},v,{window:v.windowStart+" - "+v.windowEnd,frequency:v.ruleId,assign:v.flexible?t("val.auto"):t("val.fixed"),_auto:v.flexible,_yes:v.mandatory,mandatory:yesNo(v.mandatory)}); });
+      } else if (state.activeTab === "resources") {
+        setTitle("fa-people-group", "tab.resources");
+        columns = [["date","col.date"],["id","col.id"],["name","col.person"],["mode","col.mode"],["work","col.work"],["visitCount","col.visitCount"],["load","col.load"],["start","col.start"],["end","col.end"]];
+        rows = state.expandedResources.map(function(r){
+          const dayVisits = state.visits.filter(function(v){ return v.date === r.date; });
+          const estimate = estimateDayMinutes(dayVisits.map(function(v){ return {lat:v.lat, lng:v.lng, minutes:v.duration}; }), r);
+          const load = dayVisits.length ? formatDuration(estimate * 60) + " / " + formatDuration(netCapacityMinutes(r) * 60) : t("load.empty");
+          return Object.assign({},r,{work:r.workStart+" - "+r.workEnd+(r.halfDay?t("load.halfDay",{name:holidayName(r.halfDay)}):""),visitCount:dayVisits.length,load:load,start:r.hasStart?coordText(r.startLat,r.startLng):t("start.firstVisit"),end:r.returnToStart?coordText(r.endLat,r.endLng):t("end.lastVisit")});
+        });
+        state.offDays.forEach(function(d){
+          rows.push(Object.assign({},d.resource,{date:d.date,work:"-",visitCount:"-",load:t("load.holiday",{name:holidayName(d.name)}),start:"",end:""}));
+        });
+        rows.sort(function(a,b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      } else if (state.activeTab === "results") {
+        setTitle("fa-route", "tab.results");
+        columns = [["date","col.date"],["order","col.order"],["pointId","col.poiId"],["pointName","col.poiName"],["start","col.arrival"],["end","col.end"],["park","col.park"],["duration","col.visitMin"],["distanceMeters","col.fromPrev"],["travel","col.travelMin"],["window","col.window"]];
+        rows = state.resultRows.map(function(r){ return Object.assign({},r,{order:resultOrder(r),pointName:resultName(r),start:formatTimeFromIso(r.start),end:formatTimeFromIso(r.end),distanceMeters:formatDistance(r.distanceMeters),travel:Math.round(r.travelSeconds/60)}); });
+      } else {
+        setTitle("fa-triangle-exclamation", "tab.skippedTitle");
+        columns = [["date","col.date"],["pointId","col.poiId"],["pointName","col.poiName"],["reason","col.reason"],["mandatory","col.mandatory"]];
+        rows = state.skippedRows.map(function(r){ return Object.assign({},r,{reason:r.reason||t("skip.default"),_yes:r.mandatory,mandatory:yesNo(r.mandatory)}); });
+      }
+
+      if (state.dayFilter) rows = rows.filter(function(row){ return row.date === state.dayFilter; });
+      if (query) rows = rows.filter(function(row){ return normalizeText(Object.values(row).join(" ")).includes(query); });
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty"><i class="fa-regular fa-folder-open"></i>' + escapeHtml(t("table.empty")) + '</div>';
+        return;
+      }
+      let html = "<table><thead><tr>";
+      columns.forEach(function(c){ html += "<th>" + escapeHtml(t(c[1])) + "</th>"; });
+      html += "</tr></thead><tbody>";
+      rows.forEach(function(row){
+        html += "<tr>";
+        columns.forEach(function(c){
+          let value = row[c[0]];
+          if (c[0] === "date") value = formatDateUi(value) + " " + dayShort(value);
+          if (c[0] === "mode") value = modeLabel(value);
+          if (c[0] === "mandatory") {
+            html += '<td><span class="pill ' + (row._yes === true ? "ok" : "warn") + '">' + escapeHtml(value) + "</span></td>";
+          } else if (c[0] === "assign") {
+            html += '<td><span class="pill ' + (row._auto ? "ok" : "") + '">' + escapeHtml(value) + "</span></td>";
+          } else html += "<td title=\"" + escapeAttr(value) + "\">" + escapeHtml(value) + "</td>";
+        });
+        html += "</tr>";
+      });
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+    function renderMap() {
+      if (!state.map) return;
+      clearMapObjects();
+      const bounds = new google.maps.LatLngBounds();
+      let hasBounds = false;
+      const resource = selectedResource();
+      document.getElementById("walking-warning").style.display = resource && resource.mode === "WALKING" ? "block" : "none";
+      const inFilter = function(date){ return !state.dayFilter || date === state.dayFilter; };
+
+      if (state.dayPlans.length && state.activeTab === "results") {
+        const colors = ["#d11f52","#2563eb","#10b981","#f59e0b","#8b5cf6","#0891b2","#dc2626","#65a30d"];
+        state.dayPlans.forEach(function(plan, dayIndex){
+          if (!inFilter(plan.resource.date)) return;
+          const route = (plan.response.routes || [])[0] || {};
+          const points = decodePolyline(route.routePolyline);
+          if (points.length) {
+            const polyline = new google.maps.Polyline({path:points,strokeColor:colors[dayIndex%colors.length],strokeOpacity:.88,strokeWeight:5,map:state.map});
+            state.polylines.push(polyline);
+            points.forEach(function(p){ bounds.extend(p); hasBounds=true; });
+          }
+        });
+        state.resultRows.forEach(function(row){
+          if (row.isReturn || !inFilter(row.date)) return;
+          const color = colors[row.routeIndex%colors.length];
+          const marker = new google.maps.Marker({
+            position:{lat:row.lat,lng:row.lng}, map:state.map,
+            label:{text:String(row.order),color:"#fff",fontWeight:"700"},
+            icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,fillColor:color,fillOpacity:1,strokeColor:"#fff",strokeWeight:2}
+          });
+          const info = new google.maps.InfoWindow({content:"<b>"+escapeHtml(row.pointName)+"</b><br>"+escapeHtml(formatDateUi(row.date))+"<br>"+escapeHtml(formatTimeFromIso(row.start))+" - "+escapeHtml(formatTimeFromIso(row.end))});
+          marker.addListener("click",function(){info.open({map:state.map,anchor:marker});});
+          state.markers.push(marker); bounds.extend(marker.getPosition()); hasBounds=true;
+        });
+      } else {
+        state.visits.filter(function(v){ return inFilter(v.date); }).slice(0,500).forEach(function(v){
+          if (!validCoordinate(v.lat,v.lng)) return;
+          const marker = new google.maps.Marker({position:{lat:v.lat,lng:v.lng},map:state.map,title:v.pointName});
+          state.markers.push(marker); bounds.extend(marker.getPosition()); hasBounds=true;
+        });
+      }
+      if (resource && validCoordinate(resource.startLat, resource.startLng)) {
+        const homeMarker = new google.maps.Marker({
+          position:{lat:resource.startLat,lng:resource.startLng}, map:state.map, title:t("map.startMarker", {name:resource.name}),
+          icon:{path:google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,scale:6,fillColor:"#0f172a",fillOpacity:1,strokeColor:"#fff",strokeWeight:2}
+        });
+        state.markers.push(homeMarker); bounds.extend(homeMarker.getPosition()); hasBounds=true;
+      }
+      if (hasBounds) state.map.fitBounds(bounds,60);
+    }
+    function clearMapObjects() {
+      state.markers.forEach(function(m){ m.setMap(null); });
+      state.polylines.forEach(function(p){ p.setMap(null); });
+      state.markers = []; state.polylines = [];
+    }
+
+    function decodePolyline(polyline) {
+      if (!polyline || !window.google || !google.maps.geometry) return [];
+      const encoded = polyline.points || polyline.encodedPolyline || polyline;
+      if (typeof encoded !== "string") return [];
+      try { return google.maps.geometry.encoding.decodePath(encoded); } catch(e) { return []; }
+    }
+
+    // =====================================================================
+    // Excel template and result export
+    // =====================================================================
+
+    function downloadTemplate() {
+      if (currentLang === "en") { downloadTemplateEn(); return; }
+      const wb = XLSX.utils.book_new();
+      const points = [
+        ["POI_ID","POI_ADI","IL","ILCE","ADRES","ENLEM","BOYLAM","PERSONEL_ID","ZIYARET_SURESI_DK","ZIYARET_SAATLERI","AYLIK_ZIYARET_SAYISI","ZIYARET_GUNLERI","BOLGE","EKIP_GRUBU","AKTIF","NOT"],
+        ["POI-001","Kadıköy Mağaza","İstanbul","Kadıköy","Kadıköy, İstanbul",40.9902,29.0292,"P-01",30,"","","","ANADOLU","","EVET","Ayda 1 kez, gün serbest, 09:00-18:00"],
+        ["POI-002","Moda Ziyaret Noktası","İstanbul","Kadıköy","Moda, İstanbul",40.9825,29.0245,"P-01",45,"10:00-22:00",2,"","ANADOLU","","EVET","Ayda 2 kez"],
+        ["POI-003","Bostancı Mağaza","İstanbul","Kadıköy","Bostancı, İstanbul",40.9540,29.0950,"P-02",25,"","","SALI,PERSEMBE","ANADOLU","","EVET","Yalnız Salı veya Perşembe"]
+      ];
+      // İsteğe bağlı sayfa: burada satırı olan nokta için POI_LISTESI'ndeki ziyaret sütunları yok sayılır.
+      const rules = [
+        ["KURAL_ID","POI_ID","BASLANGIC_TARIHI","BITIS_TARIHI","FREKANS_TIPI","FREKANS_ADEDI","ZIYARET_GUNLERI","MIN_GUN_ARALIGI","SAAT_BASLANGIC","SAAT_BITIS","ZAMAN_KISITI","ZIYARET_SURESI_DK","ONCELIK","ZORUNLU_ZIYARET","IZINLI_PERSONELLER","NOT"]
+      ];
+      const resources = [
+        ["PERSONEL_ID","PERSONEL_ADI","TARIH","CALISMA_GUNLERI","MESAI_BASLANGIC","MESAI_BITIS","ULASIM_MODU","BOLGE","YETKINLIKLER"],
+        ["P-01","Saha Personeli 1","","PZT,SAL,CAR,PER,CUM","08:30","18:00","YAYA","ANADOLU",""],
+        ["P-02","Araçlı Ekip 1","","PZT,SAL,CAR,PER,CUM","08:30","18:00","ARAC","ANADOLU",""]
+      ];
+      appendSheet(wb,points,"POI_LISTESI",[12,28,14,16,32,13,13,14,20,18,22,22,14,16,10,38]);
+      appendSheet(wb,rules,"ZIYARET_KURALLARI",[12,12,16,16,16,15,20,16,15,12,14,18,10,18,22,45]);
+      appendSheet(wb,resources,"PERSONEL_ARACLAR",[14,24,14,22,18,14,14,14,20]);
+      // İsteğe bağlı sayfa: resmi tatiller uygulamada tanımlıdır; buraya izin ve şirkete özel tatiller yazılır.
+      const holidays = [
+        ["TARIH","ACIKLAMA","YARIM_GUN","PERSONEL_ID"],
+        ["2026-12-31","Örnek: yılbaşı öncesi yarım gün","EVET",""],
+        ["2026-12-24","Örnek: P-01 yıllık izin","HAYIR","P-01"]
+      ];
+      appendSheet(wb,holidays,"TATILLER",[14,36,12,14]);
+      XLSX.writeFile(wb,t("x.templateFile"));
+    }
+    // English template: same structure with the English sheet/column names the importer also accepts.
+    function downloadTemplateEn() {
+      const wb = XLSX.utils.book_new();
+      const points = [
+        ["POI_ID","NAME","CITY","DISTRICT","ADDRESS","LATITUDE","LONGITUDE","RESOURCE_ID","DURATION","VISIT_HOURS","MONTHLY_VISITS","VISIT_DAYS","REGION","TEAM_GROUP","ACTIVE","NOTE"],
+        ["POI-001","Kadıköy Store","İstanbul","Kadıköy","Kadıköy, İstanbul",40.9902,29.0292,"P-01",30,"","","","ANATOLIA","","YES","Once a month, any day, 09:00-18:00"],
+        ["POI-002","Moda Visit Point","İstanbul","Kadıköy","Moda, İstanbul",40.9825,29.0245,"P-01",45,"10:00-22:00",2,"","ANATOLIA","","YES","Twice a month"],
+        ["POI-003","Bostancı Store","İstanbul","Kadıköy","Bostancı, İstanbul",40.9540,29.0950,"P-02",25,"","","TUE,THU","ANATOLIA","","YES","Only Tuesday or Thursday"]
+      ];
+      // Optional sheet: when a point has a row here, the visit columns on POINTS are ignored for it.
+      const rules = [
+        ["RULE_ID","POI_ID","START_DATE","END_DATE","FREQUENCY_TYPE","FREQUENCY_COUNT","VISIT_DAYS","MIN_DAY_GAP","WINDOW_START","WINDOW_END","WINDOW_TYPE","DURATION","PRIORITY","MANDATORY","ALLOWED_PEOPLE","NOTE"]
+      ];
+      const resources = [
+        ["RESOURCE_ID","RESOURCE_NAME","DATE","WORK_DAYS","WORK_START","WORK_END","TRAVEL_MODE","REGION","SKILLS"],
+        ["P-01","Field Staff 1","","MON,TUE,WED,THU,FRI","08:30","18:00","WALKING","ANATOLIA",""],
+        ["P-02","Driving Team 1","","MON,TUE,WED,THU,FRI","08:30","18:00","DRIVING","ANATOLIA",""]
+      ];
+      // Optional sheet: Turkish public holidays are built in; add leave and company-specific days here.
+      const holidays = [
+        ["DATE","DESCRIPTION","HALF_DAY","RESOURCE_ID"],
+        ["2026-12-31","Example: half day before New Year","YES",""],
+        ["2026-12-24","Example: P-01 annual leave","NO","P-01"]
+      ];
+      appendSheet(wb,points,"POINTS",[12,28,14,16,32,13,13,14,12,16,16,18,14,16,10,38]);
+      appendSheet(wb,rules,"VISIT_RULES",[12,12,14,14,16,16,16,14,14,12,14,12,10,12,18,45]);
+      appendSheet(wb,resources,"RESOURCES",[14,24,14,24,12,12,14,14,20]);
+      appendSheet(wb,holidays,"HOLIDAYS",[14,36,12,14]);
+      XLSX.writeFile(wb,t("x.templateFile"));
+    }
+    function appendSheet(wb,data,name,widths) {
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws["!cols"] = widths.map(function(w){ return {wch:w}; });
+      XLSX.utils.book_append_sheet(wb,ws,name);
+    }
+
+    function exportResults() {
+      if (!state.resultRows.length && !state.skippedRows.length) return;
+      const wb = XLSX.utils.book_new();
+      // Builds a row object from [headerKey, value] pairs so column titles follow the active language.
+      const row = function(pairs){ const o = {}; pairs.forEach(function(p){ o[t(p[0])] = p[1]; }); return o; };
+      const routeRows = state.resultRows.map(function(r){
+        return row([
+          ["col.date",r.date],["x.day",dayShort(r.date)],["x.personId",r.resourceId],["x.person",r.resourceName],
+          ["x.mode",modeLabel(r.mode)],["x.order",resultOrder(r)],["col.poiId",r.pointId],
+          ["col.poiName",resultName(r)],["x.address",r.address],["x.arrival",formatTimeFromIso(r.start)],
+          ["x.finish",formatTimeFromIso(r.end)],["x.park",r.park],["x.visit",r.duration],
+          ["x.distance",(r.distanceMeters/1000).toFixed(2)],
+          ["x.travel",Math.round(r.travelSeconds/60)],["x.wait",Math.round(r.waitSeconds/60)],
+          ["col.window",r.window]
+        ]);
+      });
+      const dayRows = state.dayPlans.map(function(p){
+        return row([
+          ["col.date",p.resource.date],["x.day",dayShort(p.resource.date)],["x.visits",p.planned],
+          ["x.start",formatTimeFromIso(p.startTime)],["x.end",formatTimeFromIso(p.endTime)],
+          ["x.dayDistance",(p.distanceMeters/1000).toFixed(2)],
+          ["x.dayTravel",Math.round(p.travelSeconds/60)],["x.dayTotal",Math.round(p.totalSeconds/60)]
+        ]);
+      });
+      const skippedRows = state.skippedRows.map(function(r){
+        return row([["col.date",r.date],["col.poiId",r.pointId],["col.poiName",r.pointName],["col.reason",r.reason||t("skip.default")],["col.mandatory",r.mandatory?t("common.yes"):t("common.no")]]);
+      });
+      const resource = selectedResource();
+      const total = function(field){ return state.dayPlans.reduce(function(sum, p){ return sum + (p[field] || 0); }, 0); };
+      const summary = [
+        ["x.sumPerson", resource ? resource.id + " - " + resource.name : ""],
+        ["x.sumPlanned", total("planned")],
+        ["x.sumSkipped", state.skippedRows.length],
+        ["x.sumDays", state.dayPlans.filter(function(p){ return p.planned; }).length],
+        ["x.sumDistance", (total("distanceMeters")/1000).toFixed(2)],
+        ["x.sumDuration", formatDuration(total("totalSeconds"))]
+      ].map(function(s){ return row([["x.metric",t(s[0])],["x.value",s[1]]]); });
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(routeRows),t("x.sheetRoute"));
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(dayRows),t("x.sheetDays"));
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(skippedRows),t("x.sheetSkipped"));
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summary),t("x.sheetSummary"));
+      XLSX.writeFile(wb,t("x.filePrefix") + (resource ? resource.id + "_" : "") + document.getElementById("plan-start").value + ".xlsx");
+    }
+    function showRequestJson() {
+      if (!state.lastRequests.length) return;
+      const requests = state.lastRequests.filter(function(r){ return !state.dayFilter || r.label.endsWith("|" + state.dayFilter); });
+      showMessages(t("opt.requestsTitle", {n:requests.length}), ['<pre style="white-space:pre-wrap;font-size:10px;max-height:55vh;overflow:auto">'+escapeHtml(JSON.stringify(requests,null,2))+"</pre>"], false, true);
+    }
+    function clearData() {
+      state.workbookName=""; state.points=[]; state.rules=[]; state.resources=[]; state.visits=[]; state.expandedResources=[];
+      state.dayPlans=[]; state.lastRequests=[]; state.warnings=[]; state.resultRows=[]; state.skippedRows=[];
+      state.selectedResourceId=""; state.dayFilter=""; state.holidays=[]; state.offDays=[];
+      document.getElementById("file-input").value="";
+      document.getElementById("file-name").textContent=t("file.prompt");
+      document.getElementById("export-button").disabled=true;
+      document.getElementById("request-button").disabled=true;
+      switchTab("visits");
+      renderAll();
+    }
+    function showMessages(title, messages, isError, rawHtml) {
+      document.getElementById("message-title").textContent=title;
+      if (rawHtml) document.getElementById("message-body").innerHTML=messages.join("");
+      else document.getElementById("message-body").innerHTML='<ul class="'+(isError?"errors":"")+'">'+messages.map(function(m){return "<li>"+escapeHtml(m)+"</li>";}).join("")+"</ul>";
+      document.getElementById("message-modal").classList.add("open");
+    }
+
+    function showToast(title,message,type) {
+      const toast=document.getElementById("toast");
+      toast.className="toast show "+(type||"");
+      document.getElementById("toast-title").textContent=title;
+      document.getElementById("toast-message").textContent=message;
+      clearTimeout(showToast.timer);
+      showToast.timer=setTimeout(function(){toast.classList.remove("show");},4200);
+    }
+
+    function normalizeText(value) {
+      return String(value == null ? "" : value).trim().toLocaleUpperCase("tr-TR")
+        .replace(/İ/g,"I").replace(/Ş/g,"S").replace(/Ğ/g,"G").replace(/Ü/g,"U").replace(/Ö/g,"O").replace(/Ç/g,"C")
+        .replace(/[^A-Z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+    }
+
+    function valueOf(row, aliases) {
+      const normalized={};
+      Object.keys(row).forEach(function(k){normalized[normalizeText(k)]=row[k];});
+      for (let i=0;i<aliases.length;i++) {
+        const key=normalizeText(aliases[i]);
+        if (normalized[key] !== undefined && normalized[key] !== "") return normalized[key];
+      }
+      return "";
+    }
+
+    function hasAnyValue(row){return Object.values(row).some(function(v){return v!==""&&v!==null&&v!==undefined;});}
+    function toNumber(value){if(value===""||value===null||value===undefined)return NaN;const n=Number(String(value).replace(",","."));return Number.isFinite(n)?n:NaN;}
+    function toBoolean(value,defaultValue){if(value===""||value===null||value===undefined)return defaultValue;return ["EVET","E","YES","TRUE","1","AKTIF"].includes(normalizeText(value));}
+    function splitList(value){return String(value||"").split(/[;,|]/).map(function(v){return v.trim();}).filter(Boolean);}
+    function unique(values){return Array.from(new Set(values));}
+    function validCoordinate(lat,lng){return Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;}
+    function coordText(lat,lng){return validCoordinate(lat,lng)?lat.toFixed(5)+", "+lng.toFixed(5):"";}
+    function parseCoordinatePair(value){const m=String(value||"").trim().match(/^(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)$/);if(!m)return null;return {lat:Number(m[1].replace(",",".")),lng:Number(m[2].replace(",","."))};}
+    function parseWindow(value){const p=String(value||"").split(/\s*[-–—]\s*/);return {start:parseTimeValue(p[0])||"09:00",end:parseTimeValue(p[1])||"18:00"};}
+
+    function parseDateValue(value) {
+      if (!value) return "";
+      if (value instanceof Date && !isNaN(value)) return formatDate(value);
+      if (typeof value === "number" && window.XLSX) {
+        const d=XLSX.SSF.parse_date_code(value);
+        if(d)return [d.y,String(d.m).padStart(2,"0"),String(d.d).padStart(2,"0")].join("-");
+      }
+      const s=String(value).trim();
+      let m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+      m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+      if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+      return "";
+    }
+
+    function parseTimeValue(value) {
+      if (value === "" || value === null || value === undefined) return "";
+      if (value instanceof Date) return String(value.getHours()).padStart(2,"0")+":"+String(value.getMinutes()).padStart(2,"0");
+      if (typeof value === "number") {
+        const total=Math.round((value%1)*24*60);
+        return String(Math.floor(total/60)%24).padStart(2,"0")+":"+String(total%60).padStart(2,"0");
+      }
+      const m=String(value).trim().match(/(\d{1,2})[:.](\d{2})/);
+      return m?m[1].padStart(2,"0")+":"+m[2]:"";
+    }
+
+    function normalizeTravelMode(value){const n=normalizeText(value);return n.includes("YAYA")||n.includes("WALK")?"WALKING":"DRIVING";}
+    function parseDayNumbers(value){return unique(splitList(value).map(function(v){return DAY_ALIASES[normalizeText(v)];}).filter(function(v){return v!==undefined;}));}
+    function dateMatchesDays(date,value){const days=parseDayNumbers(value);return !days.length||days.includes(dayNumber(date));}
+    function dayNumber(date){return parseDate(date).getDay();}
+    function parseDate(s){const p=String(s).split("-").map(Number);return new Date(p[0],p[1]-1,p[2],12,0,0);}
+    function formatDate(d){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");}
+    // formatDateTr is also used inside API requests, so it must not depend on the UI language
+    // (otherwise switching language would change the request and bypass the solve cache).
+    function formatDateTr(s){if(!s)return "";const p=s.split("-");return p[2]+"."+p[1]+"."+p[0];}
+    function formatDateUi(s){if(!s)return "";return currentLang==="en"?s:formatDateTr(s);}
+    function addDays(s,count){const d=parseDate(s);d.setDate(d.getDate()+count);return formatDate(d);}
+    function maxDate(a,b){return !a?b:!b?a:(a>b?a:b);}
+    function minDate(a,b){return !a?b:!b?a:(a<b?a:b);}
+    function enumerateDates(start,end){const out=[];let cur=start;while(cur<=end&&out.length<370){out.push(cur);cur=addDays(cur,1);}return out;}
+    function timeToMinutes(value){const p=String(value||"00:00").split(":").map(Number);return p[0]*60+(p[1]||0);}
+    function minutesToTime(total){return String(Math.floor(total/60)).padStart(2,"0")+":"+String(total%60).padStart(2,"0");}
+    function toIso(date,time){return new Date(date+"T"+time+":00"+APP_CONFIG.utcOffset).toISOString();}
+    function addMinutesIso(iso,minutes){return new Date(new Date(iso).getTime()+minutes*60000).toISOString();}
+    function formatTimeFromIso(iso){if(!iso)return "";return new Intl.DateTimeFormat("tr-TR",{timeZone:APP_CONFIG.timezone,hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(iso));}
+    function durationSeconds(value){if(!value)return 0;if(typeof value==="number")return value;const m=String(value).match(/^(-?\d+(?:\.\d+)?)s$/);return m?Number(m[1]):0;}
+    function formatDuration(seconds){const min=Math.round(Number(seconds||0)/60);return t("unit.duration",{h:Math.floor(min/60),m:min%60});}
+    function formatDistance(meters){const m=Number(meters||0);return m>=1000?(m/1000).toFixed(2)+" km":Math.round(m)+" m";}
+    // Google displayName alanını 63 bayt (UTF-8) ile sınırlar; Türkçe harfler 2 bayt sayılır. Yalnızca uzun adlar kısaltılır.
+    function clipName(text){text=String(text||"");const enc=new TextEncoder();while(enc.encode(text).length>60)text=text.slice(0,-1);return text;}
+    // Çözülen günler tarayıcıda saklanır; sayfa yenilense de aynı gün yeniden gönderilip faturalanmaz.
+    function loadSolveCache(){try{return JSON.parse(localStorage.getItem(CACHE_KEY)||"{}")||{};}catch(e){return {};}}
+    function saveSolveCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify(state.solveCache));}catch(e){/* kota dolduysa yalnız bellekte kalır */}}
+    function numberOrDefault(value,defaultValue){return value===undefined||value===null?defaultValue:Number(value);}
+    function countUsedRoutes(routes){return (routes||[]).filter(function(r){return (r.visits||[]).length;}).length;}
+
+    function distanceKm(a, b) {
+      if (!validCoordinate(a.lat, a.lng) || !validCoordinate(b.lat, b.lng)) return 0;
+      const rad = Math.PI / 180;
+      const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+      const h = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(a.lat*rad) * Math.cos(b.lat*rad) * Math.sin(dLng/2) * Math.sin(dLng/2);
+      return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+    function daysBetween(a, b){ return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+    function weekKey(date){ return addDays(date, -((dayNumber(date) + 6) % 7)); }
+    function formatSkippedReasons(skipped) {
+      if (skipped.reasons && skipped.reasons.length) return skipped.reasons.map(function(r){return r.code||r.reason||JSON.stringify(r);}).join(", ");
+      return skipped.reason || "";
+    }
+    function extractApiError(payload,status){const msg=payload&&payload.error&&payload.error.message||payload&&payload.message||"HTTP "+status;return msg;}
+    function friendlyError(err){return err&&err.message?err.message:String(err||t("err.unknown"));}
+    function escapeHtml(value){return String(value==null?"":value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c];});}
+    function escapeAttr(value){return escapeHtml(value).replace(/\r?\n/g," ");}
+  </script>
+</body>
+</html>
