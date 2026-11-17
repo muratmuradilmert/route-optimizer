@@ -296,8 +296,8 @@
       <div class="modal-body">
         <div class="form-group"><label data-i18n="api.mapsKey">Google Maps API anahtarı (harita için)</label><input id="api-key-input" type="password" placeholder="AIzaSy..."></div>
         <div class="form-group check"><input id="save-key-checkbox" type="checkbox" checked><label for="save-key-checkbox" data-i18n="api.saveKey">Anahtarı bu tarayıcıda hatırla</label></div>
-        <div class="form-group"><label data-i18n="api.projectId">Google Cloud proje kimliği (Project ID)</label><input id="project-id-input" type="text" data-i18n-placeholder="api.projectPlaceholder" placeholder="proje-kimligi"></div>
-        <div class="form-group"><label data-i18n="api.token">OAuth erişim belirteci (isteğe bağlı, saklanmaz)</label><input id="access-token-input" type="password" placeholder="ya29..."></div>
+        <div class="form-group"><label id="project-id-label" data-i18n="api.projectId">Google Cloud proje kimliği (Project ID, zorunlu)</label><input id="project-id-input" type="text" data-i18n-placeholder="api.projectPlaceholder" placeholder="proje-kimligi"></div>
+        <div class="form-group"><label id="access-token-label" data-i18n="api.token">OAuth erişim belirteci (zorunlu, saklanmaz)</label><input id="access-token-input" type="password" placeholder="ya29..."></div>
         <div class="help" data-i18n="api.help">API anahtarı yalnızca Google Maps haritası için kullanılır. Rota istekleri, uygulama Baslat.bat (yerel sunucu) ile açıldığında klasördeki servis hesabı anahtarıyla gönderilir; bu durumda proje kimliği ve belirteç gerekmez. Sunucusuz kullanımda (ör. GitHub Pages) proje kimliğini ve "gcloud auth print-access-token" ile alınan belirteci girin. Belirteç yaklaşık 1 saat geçerlidir ve saklanmaz.</div>
       </div>
       <div class="modal-foot"><button class="btn danger" id="delete-key-button"><i class="fa-solid fa-trash"></i> <span data-i18n="api.clear">Anahtarı temizle</span></button><button class="btn primary" id="use-key-button"><i class="fa-solid fa-check"></i> <span data-i18n="api.use">Kaydet</span></button></div>
@@ -387,9 +387,11 @@
         "table.empty": "Bu bölümde gösterilecek kayıt yok.",
         "api.mapsKey": "Google Maps API anahtarı (harita için)",
         "api.saveKey": "Anahtarı bu tarayıcıda hatırla",
-        "api.projectId": "Google Cloud proje kimliği (Project ID)",
+        "api.projectId": "Google Cloud proje kimliği (Project ID, zorunlu)",
+        "api.projectIdProxy": "Google Cloud proje kimliği (yerel sunucu açık, gerekmez)",
         "api.projectPlaceholder": "proje-kimligi",
-        "api.token": "OAuth erişim belirteci (isteğe bağlı, saklanmaz)",
+        "api.token": "OAuth erişim belirteci (zorunlu, saklanmaz)",
+        "api.tokenProxy": "OAuth erişim belirteci (yerel sunucu açık, gerekmez)",
         "api.help": "API anahtarı yalnızca Google Maps haritası için kullanılır. Rota istekleri, uygulama Baslat.bat (yerel sunucu) ile açıldığında klasördeki servis hesabı anahtarıyla gönderilir; bu durumda proje kimliği ve belirteç gerekmez. Sunucusuz kullanımda (ör. GitHub Pages) proje kimliğini ve \"gcloud auth print-access-token\" ile alınan belirteci girin. Belirteç yaklaşık 1 saat geçerlidir ve saklanmaz.",
         "api.clear": "Anahtarı temizle",
         "api.use": "Kaydet",
@@ -594,9 +596,11 @@
         "table.empty": "Nothing to show in this section.",
         "api.mapsKey": "Google Maps API key (for the map)",
         "api.saveKey": "Remember the key in this browser",
-        "api.projectId": "Google Cloud Project ID",
+        "api.projectId": "Google Cloud Project ID (required)",
+        "api.projectIdProxy": "Google Cloud Project ID (local server running, not needed)",
         "api.projectPlaceholder": "project-id",
-        "api.token": "OAuth access token (optional, not stored)",
+        "api.token": "OAuth access token (required, not stored)",
+        "api.tokenProxy": "OAuth access token (local server running, not needed)",
         "api.help": "The API key is only used for the Google Maps map. When the app is started with Baslat.bat (local server), route requests are sent with the service account key in the folder; no project ID or token is needed then. Without the server (e.g. on GitHub Pages), enter your project ID and a token from \"gcloud auth print-access-token\". The token is valid for about 1 hour and is not stored.",
         "api.clear": "Clear key",
         "api.use": "Save",
@@ -1102,6 +1106,13 @@
       showToast(t("toast.keyCleared"), t("toast.keyClearedMsg"), "success");
     }
     function updateApiStatus() {
+      // Belirteç ve proje kimliği yalnızca yerel sunucu yokken gerekir; etiketler buna göre değişir.
+      [["project-id-label", "api.projectId"], ["access-token-label", "api.token"]].forEach(function(pair){
+        const label = document.getElementById(pair[0]);
+        const key = pair[1] + (state.proxy ? "Proxy" : "");
+        label.setAttribute("data-i18n", key);
+        label.textContent = t(key);
+      });
       const el = document.getElementById("api-status");
       const hasToken = !!(state.accessToken && (state.projectId || APP_CONFIG.routeOptimizationEndpoint));
       if (state.proxy || hasToken) {
